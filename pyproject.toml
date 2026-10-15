@@ -7,7 +7,6 @@ dependencies = [
     "polars>=2.0.0",
     "psycopg[binary]>=3.3.6",
     "pydantic>=2.14.1",
-    "pymongo>=4.19.0",
     "redis>=8.1.0",
 ]
 

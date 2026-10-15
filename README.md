@@ -27,7 +27,7 @@ tests/
 
 ## Stack
 
-Python, Postgres, dbt, Dagster, MongoDB, DynamoDB, Redis, Docker, Terraform, GitHub Actions, AWS Lambda and S3, React, MCP.
+Python, Postgres, dbt, Dagster, DynamoDB, Redis, Docker, Terraform, GitHub Actions, AWS Lambda and S3, React, MCP.
 
 ## License
 

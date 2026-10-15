@@ -11,9 +11,9 @@ Phase 0 gives the project a reproducible local stack, automated checks on every 
 | Dataframes | polars | Fast, low-memory, and handles unpivoting wide price files cleanly | pandas |
 | Validation | pydantic | Typed models with clear error messages for rejected rows | Hand-written checks |
 | Warehouse | PostgreSQL 16 | System of record; widely used; dbt support is mature | DuckDB: simpler locally, may still be used for exploration |
-| Raw landing | MongoDB 7 | Insurer files are deeply nested JSON whose shape varies; store as received, normalize later | Raw JSON files in S3 only |
+| Raw storage | Compressed files (local disk now, S3 later) | Hospitals overwrite their files, so every download is kept as evidence; files are cheaper and simpler than any database for this | MongoDB: cut, since DynamoDB already covers NoSQL in Phase 3 and Postgres `jsonb` covers nested JSON |
 | Cache | Redis 7 | Cache-aside in front of the API; cheap and well understood | In-process cache (doesn't survive Lambda cold starts) |
-| Local services | Docker Compose | One command brings up Postgres, MongoDB and Redis, the same on any machine | Installing each database natively |
+| Local services | Docker Compose | One command brings up Postgres and Redis, the same on any machine | Installing each database natively |
 | CI | GitHub Actions | Lint, format check and tests on every push and pull request | None needed beyond this yet |
 | Lint and format | ruff | One fast tool for both | flake8 + black |
 | Cloud | AWS, Free plan | Matches my Lambda background; the Free plan makes charges impossible while learning | Paid plan with budget alerts (alerts don't stop spending) |
@@ -28,7 +28,7 @@ Phase 0 gives the project a reproducible local stack, automated checks on every 
 ## Running it
 
 ```
-docker compose up -d      # Postgres :5432, MongoDB :27017, Redis :6379
+docker compose up -d      # Postgres :5432, Redis :6379
 uv sync                   # install dependencies
 uv run pytest             # tests
 uv run ruff check .       # lint
