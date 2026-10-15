@@ -1,0 +1,25 @@
+[project]
+name = "az-price-transparency"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.1",
+    "polars>=2.0.0",
+    "psycopg[binary]>=3.3.6",
+    "pydantic>=2.14.1",
+    "pymongo>=4.19.0",
+    "redis>=8.1.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.17.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
