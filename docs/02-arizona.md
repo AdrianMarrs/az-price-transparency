@@ -96,7 +96,7 @@ uv run dagster dev -m orchestration.definitions
 ## Decisions
 
 - **All of Arizona is loaded into Postgres**, not just Pima County.
-- **Blocked files are fetched by hand** in a browser, never by automating past a bot challenge: `cms-hpt.txt` copies (contacts removed) go into `ingest/hospitals/manual_cms_hpt/` and are recorded as `found_manual_copy`, which still fails the machine-readable rule; price files are imported with `--import-file` and still fail the download rule.
+- **Blocked files are fetched by hand** in a browser, never by automating past a bot challenge: `cms-hpt.txt` copies (contacts removed) go into `ingest/hospitals/manual_cms_hpt/` and are recorded as `found_manual_copy`, which still fails the machine-readable rule; price files are imported with `--import-file` and still fail the download rule. To refresh them, `uv run python -m ingest.hospitals.download --fetch-in-browser` opens each one in your browser, waits for it in Downloads and imports it (unchanged files are recognised by checksum). It is run by a person, never scheduled.
 - **The browser user-agent fallback stays**, and is recorded as `found_browser_ua_only`.
 - **Alerts: log only for now.** The webhook is wired but unset.
 - **Rehabilitation and long-term acute care hospitals are left out**; the CMS list doesn't include them.
@@ -104,6 +104,6 @@ uv run dagster dev -m orchestration.definitions
 
 ## Open items
 
-- **Hand-downloaded price files** (Flagstaff, Verde Valley, City of Hope) don't refresh on the weekly run; re-download them when the hospitals post new ones.
+- **Hand-downloaded price files** (Flagstaff, Verde Valley, City of Hope) don't refresh on the weekly run; run `--fetch-in-browser` now and then (they were last updated in February and March 2026).
 - **Mayo Clinic Arizona** needs a streaming parser (Phase 4 skill).
 - **Insurer names:** the last 20% of price rows have no market yet; needs a review pass.

@@ -1,8 +1,10 @@
 import gzip
 import hashlib
+import os
 
 import httpx
 
+from ingest.hospitals import download as download_module
 from ingest.hospitals.download import (
     LastDownload,
     conditional_headers,
@@ -10,6 +12,9 @@ from ingest.hospitals.download import (
     download_once,
     file_format,
     import_file,
+    matches_download,
+    new_download,
+    wait_for_download,
 )
 
 URL = "https://example.org/files/123_example_standardcharges.csv"
@@ -143,3 +148,47 @@ def test_import_file_stores_a_hand_download_like_a_download(tmp_path):
     assert row["sha256"] == hashlib.sha256(BODY).hexdigest()
     with gzip.open(row["path"]) as f:
         assert f.read() == BODY
+
+
+def test_import_names_the_file_from_the_url_not_a_browser_rename(tmp_path):
+    src = tmp_path / "123_example_standardcharges (1).csv"
+    src.write_bytes(BODY)
+    row = import_file("030006", src, URL, tmp_path / "raw")
+    assert row["path"].endswith("/030006_123_example_standardcharges.csv.gz")
+
+
+def test_matches_download_accepts_browser_renames_only():
+    expected = "860110232_FLAGSTAFF_standardcharges.zip"
+    assert matches_download(expected, expected)
+    assert matches_download("860110232_FLAGSTAFF_standardcharges (2).zip", expected)
+    assert matches_download("860110232_FLAGSTAFF_standardcharges(1).zip", expected)
+    assert not matches_download(expected + ".crdownload", expected)
+    assert not matches_download("860110232_FLAGSTAFF_standardcharges_old.zip", expected)
+
+
+def test_new_download_waits_out_firefox_placeholder_and_part_file(tmp_path):
+    old = tmp_path / "a_standardcharges.zip"
+    old.write_bytes(b"old")
+    os.utime(old, (1_000, 1_000))
+    placeholder = tmp_path / "a_standardcharges(1).zip"
+    placeholder.write_bytes(b"")
+    part = tmp_path / "a_standardcharges(1).WjX8_6BU.zip.part"
+    part.write_bytes(b"half")
+    assert new_download(tmp_path, "a_standardcharges.zip", since=2_000) is None
+    part.unlink()
+    assert new_download(tmp_path, "a_standardcharges.zip", since=2_000) is None  # still empty
+    placeholder.write_bytes(b"new")
+    assert new_download(tmp_path, "a_standardcharges.zip", since=2_000) == placeholder
+
+
+def test_wait_for_download_returns_once_the_size_holds(tmp_path, monkeypatch):
+    monkeypatch.setattr(download_module, "DOWNLOADS_DIR", tmp_path)
+    monkeypatch.setattr(download_module.time, "sleep", lambda s: None)
+    (tmp_path / "a_standardcharges.zip").write_bytes(b"done")
+    assert wait_for_download("a_standardcharges.zip", since=0) == tmp_path / "a_standardcharges.zip"
+
+
+def test_wait_for_download_gives_up(tmp_path, monkeypatch):
+    monkeypatch.setattr(download_module, "DOWNLOADS_DIR", tmp_path)
+    monkeypatch.setattr(download_module, "BROWSER_WAIT_SECONDS", 0)
+    assert wait_for_download("a_standardcharges.zip", since=0) is None

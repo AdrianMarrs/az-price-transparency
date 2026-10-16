@@ -3,6 +3,7 @@
 Usage:
     uv run python -m ingest.hospitals.download [--ccn 030006 ...]
     uv run python -m ingest.hospitals.download --import-file 030023 path/to/file.zip
+    uv run python -m ingest.hospitals.download --fetch-in-browser [--ccn 030023 ...]
 
 Reads warehouse/seeds/hospital_sources.csv. Each file is streamed (never held in memory),
 hashed with SHA-256 as it arrives, and written gzip-compressed to
@@ -13,13 +14,20 @@ or when its checksum matches the last download.
 --import-file takes a file downloaded by hand in a browser, for price files that refuse
 programs (a bot challenge), and stores and records it the same way with access
 manual_download. Compliance still counts the download rule as failed for these.
+
+--fetch-in-browser does that hand download for you, when you run it: it opens each blocked
+price file's URL in your default browser, waits for the file to land in your Downloads
+folder, and imports it. By default it covers every hospital imported by hand before. It is
+never scheduled: the pipeline itself does not work around bot challenges.
 """
 
 import argparse
 import gzip
 import hashlib
 import os
+import sys
 import time
+import webbrowser
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -38,6 +46,8 @@ CHUNK = 1 << 20  # 1 MiB
 # Files larger than this (by Content-Length) are skipped and recorded: the parser holds a
 # file in memory, so these wait for a streaming parser (Mayo Clinic Arizona's is 21.5 GB).
 MAX_BYTES = 5 * 10**9
+DOWNLOADS_DIR = Path(os.environ.get("DOWNLOADS_DIR", Path.home() / "Downloads"))
+BROWSER_WAIT_SECONDS = 600
 
 SCHEMA_SQL = """
 CREATE SCHEMA IF NOT EXISTS raw;
@@ -192,9 +202,12 @@ def record(conn: psycopg.Connection, row: dict, attempted_at: datetime) -> None:
 
 
 def import_file(ccn: str, src: Path, url: str, day_dir: Path) -> dict:
-    """Store a file downloaded by hand as data/raw/<day>/<ccn>_<name>.gz; returns its row."""
+    """Store a file downloaded by hand as data/raw/<day>/<ccn>_<name>.gz; returns its row.
+    The name comes from the URL when there is one, since a browser renames a repeat
+    download ("file (1).zip")."""
     day_dir.mkdir(parents=True, exist_ok=True)
-    dest = day_dir / f"{ccn}_{src.name}.gz"
+    name = (Path(httpx.URL(url).path).name if url else "") or src.name
+    dest = day_dir / f"{ccn}_{name}.gz"
     digest, size = hashlib.sha256(), 0
     part = dest.with_name(dest.name + ".part")
     with src.open("rb") as f, gzip.open(part, "wb", compresslevel=6) as out:
@@ -214,15 +227,81 @@ def import_manual(ccn: str, src: Path) -> dict:
     if sources.is_empty():
         raise SystemExit(f"{ccn} is not in {SOURCES_PATH}")
     url = sources["mrf_url"][0] or ""
-    if url and Path(httpx.URL(url).path).name != src.name:
+    expected = Path(httpx.URL(url).path).name if url else ""
+    if expected and not matches_download(src.name, expected):
         print(f"note: {src.name} is not the file named in the sources seed ({url})")
     started = datetime.now(UTC)
-    row = import_file(ccn, src, url, RAW_DIR / started.strftime("%Y-%m-%d"))
     with psycopg.connect(DATABASE_URL, autocommit=True) as conn:
         conn.execute(SCHEMA_SQL)
+        last = last_download(conn, ccn, url)
+        row = import_file(ccn, src, url, RAW_DIR / started.strftime("%Y-%m-%d"))
+        if last and last.sha256 == row["sha256"] and Path(last.path).exists():
+            if Path(row["path"]) != Path(last.path):
+                Path(row["path"]).unlink()  # same bytes as last time: keep the earlier copy
+            row |= {"outcome": "unchanged", "path": last.path}
         record(conn, row, started)
-    print(f"{ccn}  imported {row['size_bytes'] / 1e6:,.0f} MB  {row['path']}")
+    print(f"{ccn}  {row['outcome']} {row['size_bytes'] / 1e6:,.0f} MB  {row['path']}")
     return row
+
+
+def matches_download(name: str, expected: str) -> bool:
+    """True for the expected file name or a browser's renamed repeat: "name (1).zip" (Edge,
+    Chrome) or "name(1).zip" (Firefox)."""
+    stem, suffix = Path(expected).stem, Path(expected).suffix
+    if name == expected:
+        return True
+    if not (name.startswith(stem) and name.endswith(suffix)):
+        return False
+    middle = name.removeprefix(stem).removesuffix(suffix).lstrip(" ")
+    return middle.startswith("(") and middle.endswith(")") and middle[1:-1].isdigit()
+
+
+def new_download(folder: Path, expected: str, since: float) -> Path | None:
+    """The newest finished download of `expected` in folder since `since`, if any. None
+    while any download is still in progress (Firefox's .part, Chrome and Edge's
+    .crdownload), since Firefox creates the final file empty before filling it."""
+    recent = [p for p in folder.iterdir() if p.is_file() and p.stat().st_mtime > since]
+    if any(p.suffix in (".part", ".crdownload") for p in recent):
+        return None
+    found = [p for p in recent if p.stat().st_size > 0 and matches_download(p.name, expected)]
+    return max(found, key=lambda p: p.stat().st_mtime) if found else None
+
+
+def wait_for_download(expected: str, since: float) -> Path | None:
+    """Poll DOWNLOADS_DIR until the file appears and its size holds steady."""
+    size, deadline = -1, time.time() + BROWSER_WAIT_SECONDS
+    while time.time() < deadline:
+        time.sleep(2)
+        found = new_download(DOWNLOADS_DIR, expected, since)
+        if found and found.stat().st_size == size:
+            return found
+        size = found.stat().st_size if found else -1
+    return None
+
+
+def fetch_in_browser(ccns: list[str] | None = None) -> list[dict]:
+    """Open each blocked price file in the browser, wait for the download, import it."""
+    if not ccns:
+        with psycopg.connect(DATABASE_URL, autocommit=True) as conn:
+            conn.execute(SCHEMA_SQL)
+            ccns = [r[0] for r in conn.execute(
+                "SELECT DISTINCT ccn FROM raw.source_files WHERE access = 'manual_download'"
+            ).fetchall()]  # fmt: skip
+    if not ccns:
+        raise SystemExit("no hospital has been imported by hand yet; name them with --ccn")
+    sources = pl.read_csv(SOURCES_PATH, infer_schema_length=0).filter(pl.col("ccn").is_in(ccns))
+    rows = []
+    for s in sources.iter_rows(named=True):
+        expected = Path(httpx.URL(s["mrf_url"]).path).name
+        since = time.time() - 1
+        print(f"{s['ccn']}  opening {s['mrf_url']}")
+        webbrowser.open(s["mrf_url"])
+        path = wait_for_download(expected, since)
+        if path is None:
+            print(f"{s['ccn']}  no {expected} in {DOWNLOADS_DIR} after {BROWSER_WAIT_SECONDS}s")
+            continue
+        rows.append(import_manual(s["ccn"], path))
+    return rows
 
 
 def download_hospitals(ccns: list[str] | None = None) -> list[dict]:
@@ -259,8 +338,13 @@ def main() -> None:
     parser.add_argument("--ccn", nargs="*", help="only these hospitals")
     parser.add_argument("--import-file", nargs=2, metavar=("CCN", "PATH"),
                         help="store a price file downloaded by hand instead of downloading")  # fmt: skip
+    parser.add_argument("--fetch-in-browser", action="store_true",
+                        help="open blocked price files in the browser and import the downloads")  # fmt: skip
     args = parser.parse_args()
-    if args.import_file:
+    sys.stdout.reconfigure(line_buffering=True)  # progress shows while waiting on a browser
+    if args.fetch_in_browser:
+        fetch_in_browser(args.ccn)
+    elif args.import_file:
         import_manual(args.import_file[0], Path(args.import_file[1]))
     else:
         download_hospitals(args.ccn)
