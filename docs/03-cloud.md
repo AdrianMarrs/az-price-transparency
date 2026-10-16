@@ -62,7 +62,7 @@ To keep weekly runs near zero, the export is idempotent and incremental. Each it
 
 Two stacks, both in `infra/`:
 
-- **`bootstrap/`**: the S3 bucket that stores Terraform state: versioned (every state write kept, old versions expire after 90 days), encrypted with S3-managed keys, public access blocked, HTTPS only, and protected from `destroy`. Its own state is local (`infra/bootstrap/terraform.tfstate`, not in Git), since a backend can't live in a bucket that doesn't exist yet; if that file is lost, `terraform import` recovers it.
+- **`bootstrap/`**: the S3 bucket that stores Terraform state: versioned (every state write kept, old versions expire after 90 days), encrypted with S3-managed keys, public access blocked, HTTPS only, and protected from `destroy`. Its first apply had to use local state, since a backend can't live in a bucket that doesn't exist yet; its state was then moved into the bucket it created (`bootstrap/terraform.tfstate`) with `terraform init -migrate-state`, so no state lives only on one machine. Tearing it down means moving the state back to local first.
 - **`main/`**: everything else. It keeps its state in that bucket, locked with S3's native lock file (`use_lockfile`, Terraform 1.10+), which replaces the DynamoDB lock table older setups needed. `default_tags` on the provider tags every resource `Project = az-price-transparency`, so the project's resources and costs can be found and torn down together.
 
 Changes are applied only from a saved plan that has been read first:
@@ -70,7 +70,7 @@ Changes are applied only from a saved plan that has been read first:
 ```
 $env:AWS_PROFILE = "az-price"
 cd infra/main
-terraform init '-backend-config=backend.hcl'     # copy backend.hcl.example; quotes needed in PowerShell 5.1
+terraform init '-backend-config=backend.hcl'     # copy backend.hcl.example (bootstrap uses ../main/backend.hcl); quotes needed in PowerShell 5.1
 terraform plan '-out=main.tfplan'
 terraform apply main.tfplan
 ```

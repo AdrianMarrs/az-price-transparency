@@ -1,11 +1,22 @@
-# The S3 bucket that holds Terraform state for infra/main.
+# The S3 bucket that holds Terraform state, for infra/main and for this stack itself.
 #
-# Applied once, by hand, with local state (this folder's terraform.tfstate, not in Git):
-# a backend can't store its state in a bucket that doesn't exist yet. If the local state
-# is lost, `terraform import aws_s3_bucket.state <bucket>` brings it back.
+# Chicken and egg: the first apply has to use local state, because the bucket doesn't
+# exist yet. After that, this stack's state was moved into the bucket it created
+# (key bootstrap/terraform.tfstate) with `terraform init -migrate-state`, so nothing
+# lives only on one machine. To tear this stack down, move its state back to local
+# first (remove the backend block, `terraform init -migrate-state`), then destroy.
 
 terraform {
   required_version = ">= 1.10" # S3 native state locking (use_lockfile)
+
+  # The bucket name includes the account id, so it is passed at init:
+  #   terraform init '-backend-config=../main/backend.hcl'
+  backend "s3" {
+    key          = "bootstrap/terraform.tfstate"
+    region       = "us-east-2"
+    encrypt      = true
+    use_lockfile = true
+  }
 
   required_providers {
     aws = {
