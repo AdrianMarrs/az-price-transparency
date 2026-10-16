@@ -1,0 +1,6 @@
+# Copied by hand from a browser on 2026-10-16 because automated access is blocked
+# Contact names and emails removed
+
+location-name: Yuma Regional Medical Center
+source-page-url: https://www.yumaregional.org/patients-and-visitors/patient-resources/transparency-in-pricing/
+mrf-url: https://yumaregional.pt.panaceainc.com/MRFDownload/yumaregional/yumaregionalmedicalcenter

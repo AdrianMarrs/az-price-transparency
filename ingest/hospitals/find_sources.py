@@ -84,6 +84,7 @@ def looks_like_price_file(text: str) -> bool:
     return first.lstrip("﻿").startswith(("hospital_name", "{"))
 
 
+REQUIRED_KEYS = ("location-name", "source-page-url", "mrf-url")
 FOUND_STATUS = {
     "ok": "found",
     "browser_ua_only": "found_browser_ua_only",
@@ -107,6 +108,10 @@ def source_row(ccn: str, website: str, location_name: str | None, status: str, t
             status, entry = "malformed", {"mrf-url": mrf_urls.pop()}
         elif readable and entry is None:
             status = "no_matching_location"
+        elif readable and not all(entry.get(k) for k in REQUIRED_KEYS):
+            # Found, but a required key is missing (White Mountain has no location-name or
+            # source-page-url lines).
+            status = "malformed" if entry.get("mrf-url") else "no_matching_location"
     entry = entry or {}
     return {
         "ccn": ccn,

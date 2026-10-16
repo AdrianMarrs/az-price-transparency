@@ -37,5 +37,20 @@ def test_lowercases_keys_and_ignores_junk_lines():
     assert parse_cms_hpt(text) == [{"location-name": "A", "mrf-url": "https://a.org/x.csv"}]
 
 
+def test_blank_lines_between_fields_dont_split_a_location():
+    # Valleywise's file has a blank line after every field.
+    text = ("location-name: Valleywise Health Medical Center\n\n"
+            "source-page-url: https://v.org/prices\n\nmrf-url: https://v.org/file\n\n"
+            "contact-name: Someone\n")  # fmt: skip
+    entries = parse_cms_hpt(text)
+    assert len(entries) == 1
+    assert entries[0]["mrf-url"] == "https://v.org/file"
+
+
+def test_locations_without_blank_lines_between_them_still_split():
+    text = "location-name: A\nmrf-url: https://a.org/a\nlocation-name: B\nmrf-url: https://b.org/b"
+    assert [e["location-name"] for e in parse_cms_hpt(text)] == ["A", "B"]
+
+
 def test_empty_file_returns_no_entries():
     assert parse_cms_hpt("") == []

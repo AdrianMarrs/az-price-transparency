@@ -1,0 +1,14 @@
+# Copied by hand from a browser on 2026-10-16 because automated access is blocked
+# Contact names and emails removed
+
+location-name: Flagstaff Medical Center
+source-page-url: https://www.nahealth.com/billing-insurance/committed-price-transparency/
+mrf-url: https://www.nahealth.com/wp-content/uploads/2026/03/860110232_FLAGSTAFFMEDICALCENTER_standardcharges.zip
+
+location-name: Verde Valley Medical Center
+source-page-url: https://www.nahealth.com/billing-insurance/committed-price-transparency/
+mrf-url: https://www.nahealth.com/wp-content/uploads/2026/03/860100882_VERDEVALLEYMEDICALCENTER_standardcharges.zip
+
+location-name: Northern Arizona Healthcare - Sedona
+source-page-url: https://www.nahealth.com/billing-insurance/committed-price-transparency/
+mrf-url: https://www.nahealth.com/wp-content/uploads/2026/03/860100882_VERDEVALLEYMEDICALCENTER_standardcharges.zip

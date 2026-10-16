@@ -1,0 +1,6 @@
+# Copied by hand from a browser on 2026-10-16 because automated access is blocked
+# Contact names and emails removed
+
+location-name: Arizona Spine & Joint Hospital
+source-page-url: https://azspineandjoint.com/Hospital-Pricing-Information
+mrf-url: https://mrfs.hyvehealthcare.com/USPI/364399746_arizona-spine-and-joint-hospital-llc_standardcharges.json

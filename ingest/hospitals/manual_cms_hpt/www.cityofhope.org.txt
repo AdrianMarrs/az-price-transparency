@@ -1,0 +1,18 @@
+# Copied by hand from a browser on 2026-10-16 because automated access is refused (403)
+# Contact names and emails removed
+
+location-name: City of Hope National Medical Center
+source-page-url: https://www.cityofhope.org/patients/our-value-and-pricing/pricing-information
+mrf-url: https://www.cityofhope.org/951683875_city-of-hope-national-medical-center-_standardcharges.json
+
+location-name: Midwestern Regional Medical Center
+source-page-url: https://www.cityofhope.org/patients/our-value-and-pricing/pricing-information
+mrf-url: https://www.cityofhope.org/362510771_midwestern-regional-medical-center,-inc._standardcharges.json
+
+location-name: Southeastern Regional Medical Center
+source-page-url: https://www.cityofhope.org/patients/our-value-and-pricing/pricing-information
+mrf-url: https://www.cityofhope.org/264572436_southeastern-regional-medical-center,-inc.-_standardcharges.json
+
+location-name: Western Regional Medical Center
+source-page-url: https://www.cityofhope.org/patients/our-value-and-pricing/pricing-information
+mrf-url: https://www.cityofhope.org/320197974_western-regional-medical-center-_standardcharges.json

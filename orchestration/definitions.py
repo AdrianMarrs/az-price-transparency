@@ -39,9 +39,9 @@ from ingest.hospitals.parse import (
 ROOT = Path(__file__).resolve().parents[1]
 HOSPITALS_SEED = ROOT / "warehouse" / "seeds" / "hospitals.csv"
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-# Loading every Arizona hospital adds roughly 4-8 GB to Postgres. Until that is decided,
-# only these counties are loaded into the warehouse (all hospitals are still parsed).
-LOAD_COUNTIES = {c.strip().upper() for c in os.environ.get("LOAD_COUNTIES", "PIMA").split(",")}
+# Counties whose prices are loaded into Postgres ("*" = all; every hospital is parsed either
+# way). Statewide adds several GB, so a small machine can set e.g. LOAD_COUNTIES=PIMA.
+LOAD_COUNTIES = {c.strip().upper() for c in os.environ.get("LOAD_COUNTIES", "*").split(",")}
 # Asset checks: flag a hospital whose parsed row count moves more than this between runs.
 ROW_SWING = 0.30
 
@@ -171,12 +171,13 @@ def parsed_file_is_current(context: dg.AssetCheckExecutionContext) -> dg.AssetCh
     group_name="hospitals",
     partitions_def=hospital_partitions,
     deps=[parsed_prices],
-    description="Prices loaded into Postgres (counties in LOAD_COUNTIES only)",
+    description="Prices loaded into Postgres (counties in LOAD_COUNTIES; default all)",
 )
 def warehouse_prices(context: dg.AssetExecutionContext) -> dg.MaterializeResult:
     ccn = context.partition_key
     county = in_scope_hospitals().filter(pl.col("ccn") == ccn)["county"].item().upper()
-    if county not in LOAD_COUNTIES or not (PARSED_DIR / f"{ccn}.parquet").exists():
+    wanted = "*" in LOAD_COUNTIES or county in LOAD_COUNTIES
+    if not wanted or not (PARSED_DIR / f"{ccn}.parquet").exists():
         return dg.MaterializeResult(metadata={"loaded": False, "county": county})
     with psycopg.connect(DATABASE_URL, autocommit=True) as conn:
         create_table(conn)

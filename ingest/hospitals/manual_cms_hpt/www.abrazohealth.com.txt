@@ -1,0 +1,30 @@
+# Copied by hand from a browser on 2026-10-16 because automated access is blocked
+# Contact names and emails removed
+
+location-name: Abrazo Arizona Heart Hospital
+source-page-url: https://www.abrazohealth.com/patients/pricing-info-estimates/hospital-pricing-information
+mrf-url: https://mrfs.hyvehealthcare.com/TenetHealth/621811285-1255640819_vhs-of-arrowhead%2C-inc_standardcharges.json
+
+location-name: Abrazo Arrowhead Campus
+source-page-url: https://www.abrazohealth.com/patients/pricing-info-estimates/hospital-pricing-information
+mrf-url: https://mrfs.hyvehealthcare.com/TenetHealth/621811285-1326022765_vhs-of-arrowhead%2C-inc_standardcharges.json
+
+location-name: Abrazo Cave Creek Hospital
+source-page-url: https://www.abrazohealth.com/patients/pricing-info-estimates/hospital-pricing-information
+mrf-url: https://mrfs.hyvehealthcare.com/TenetHealth/621861138-1699357368_vhs-acquisition-subsidiary-number-1-inc_standardcharges.json
+
+location-name: Abrazo Central Campus
+source-page-url: https://www.abrazohealth.com/patients/pricing-info-estimates/hospital-pricing-information
+mrf-url: https://mrfs.hyvehealthcare.com/TenetHealth/621809851_vhs-of-phoenix-inc_standardcharges.json
+
+location-name: Abrazo Scottsdale Campus
+source-page-url: https://www.abrazohealth.com/patients/pricing-info-estimates/hospital-pricing-information
+mrf-url: https://mrfs.hyvehealthcare.com/TenetHealth/621861138-1326022732_vhs-acquisition-subsidiary-number-1-inc_standardcharges.json
+
+location-name: Abrazo Surprise Hospital
+source-page-url: https://www.abrazohealth.com/patients/pricing-info-estimates/hospital-pricing-information
+mrf-url: https://mrfs.hyvehealthcare.com/TenetHealth/621811285-1447898622_vhs-of-arrowhead%2C-inc_standardcharges.json
+
+location-name: Abrazo West Campus
+source-page-url: https://www.abrazohealth.com/patients/pricing-info-estimates/hospital-pricing-information
+mrf-url: https://mrfs.hyvehealthcare.com/TenetHealth/621867232_hospital-development-of-west-phoenix-inc_standardcharges.json

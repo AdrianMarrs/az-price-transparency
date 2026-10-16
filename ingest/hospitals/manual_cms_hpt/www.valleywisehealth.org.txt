@@ -1,0 +1,8 @@
+# Copied by hand from a browser on 2026-10-16 because automated access is blocked
+# Contact names and emails removed; blank lines between fields kept as copied
+
+location-name: Valleywise Health Medical Center
+
+source-page-url: https://valleywisehealth.org/patients/hospital-price-transparency/
+
+mrf-url: https://valleywise.pt.panaceainc.com/MRFDownload/valleywise/valleywise
