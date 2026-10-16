@@ -1,0 +1,18 @@
+# Copied by hand from a browser on 2026-10-16 because automated access is blocked
+# Contact names and emails removed
+
+location-name: Carondelet Marana Hospital
+source-page-url: https://www.carondelet.org/patients/pricing-info-estimates/hospital-pricing-information
+mrf-url: https://mrfs.hyvehealthcare.com/TenetHealth/474131755-1487218509_smsj-tucson-holdings-llc_standardcharges.json
+
+location-name: St. Joseph's Hospital
+source-page-url: https://www.carondelet.org/patients/pricing-info-estimates/hospital-pricing-information
+mrf-url: https://mrfs.hyvehealthcare.com/TenetHealth/474131755-1538535158_smsj-tucson-holdings-llc_standardcharges.json
+
+location-name: St. Mary's Hospital
+source-page-url: https://www.carondelet.org/patients/pricing-info-estimates/hospital-pricing-information
+mrf-url: https://mrfs.hyvehealthcare.com/TenetHealth/474131755-1265818488_smsj-tucson-holdings-llc_standardcharges.json
+
+location-name: Holy Cross Hospital
+source-page-url: https://www.carondelet.org/patients/pricing-info-estimates/hospital-pricing-information
+mrf-url: https://mrfs.hyvehealthcare.com/TenetHealth/474132507_hch-tucson-holdings-llc_standardcharges.json

@@ -1,6 +1,6 @@
 import httpx
 
-from ingest.hospitals.find_sources import fetch_status, match_location, source_row
+from ingest.hospitals.find_sources import MANUAL_DIR, fetch_status, match_location, source_row
 
 SYSTEM_FILE = """location-name: Banner University Medical Center Tucson
 source-page-url: https://example.org/prices
@@ -72,6 +72,21 @@ def test_source_row_marks_files_only_served_to_browsers():
     )  # fmt: skip
     assert row["status"] == "found_browser_ua_only"
     assert row["mrf_url"] == "https://example.org/tucson_standardcharges.csv"
+
+
+def test_source_row_uses_a_manual_copy_and_records_it():
+    row = source_row(
+        "030010", "https://example.org", "Banner University Medical Center Tucson",
+        "manual_copy", SYSTEM_FILE,
+    )  # fmt: skip
+    assert row["status"] == "found_manual_copy"
+    assert row["mrf_url"] == "https://example.org/tucson_standardcharges.csv"
+
+
+def test_manual_copies_have_no_contact_details():
+    # The repo is public; people's names and emails stay out of it.
+    for path in MANUAL_DIR.glob("*.txt"):
+        assert "contact-" not in path.read_text(encoding="utf-8"), path.name
 
 
 def test_source_row_keeps_fetch_failures():

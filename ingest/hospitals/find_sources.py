@@ -25,6 +25,15 @@ USER_AGENT = "az-price-transparency/0.1 (+https://github.com/AdrianMarrs/az-pric
 # Some sites refuse non-browser clients with a plain 403. We retry once as a browser and
 # record that as its own finding. Bot challenges (e.g. Cloudflare's) are never worked around.
 BROWSER_USER_AGENT = "Mozilla/5.0"
+# When automated access is blocked, a person can open the file in a browser and save it
+# here as <host>.txt (contacts removed). It is used, and the block is still recorded.
+MANUAL_DIR = Path(__file__).parent / "manual_cms_hpt"
+BLOCKED = {"blocked_bot_challenge", "http_403"}
+
+
+def manual_copy(url: str) -> str | None:
+    path = MANUAL_DIR / f"{httpx.URL(url).host}.txt"
+    return path.read_text(encoding="utf-8") if path.exists() else None
 
 
 def fetch(client: httpx.Client, url: str) -> tuple[str, str]:
@@ -36,6 +45,8 @@ def fetch(client: httpx.Client, url: str) -> tuple[str, str]:
             retry = client.get(url, headers={"User-Agent": BROWSER_USER_AGENT})
             if fetch_status(retry) == "ok":
                 return "browser_ua_only", retry.text
+        if status in BLOCKED and (text := manual_copy(url)) is not None:
+            return "manual_copy", text
         return status, response.text
     except httpx.HTTPError as e:
         return f"error_{type(e).__name__}", ""
@@ -60,7 +71,11 @@ def match_location(entries: list[dict[str, str]], location_name: str | None) -> 
     return entries[0] if len(entries) == 1 else None
 
 
-FOUND_STATUS = {"ok": "found", "browser_ua_only": "found_browser_ua_only"}
+FOUND_STATUS = {
+    "ok": "found",
+    "browser_ua_only": "found_browser_ua_only",
+    "manual_copy": "found_manual_copy",  # automated access blocked
+}
 
 
 def source_row(ccn: str, website: str, location_name: str | None, status: str, text: str) -> dict:
