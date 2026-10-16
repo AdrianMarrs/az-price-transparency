@@ -1,12 +1,96 @@
-ccn,website,location_name
-030006,https://www.tmcaz.com,Tucson Medical Center
-030010,https://www.carondelet.org,St. Mary's Hospital
-030011,https://www.carondelet.org,St. Joseph's Hospital
-030064,https://www.bannerhealth.com,Banner University Medical Center Tucson
-030085,https://www.healthiertucson.com,Northwest Medical Center
-030111,https://www.bannerhealth.com,Banner University Medical Center South
-030114,https://www.healthiertucson.com,Oro Valley Hospital
-030148,https://www.healthiertucson.com,Northwest Healthcare Sahuarita
-034022,https://www.sonorabehavioral.com,Sonora Behavioral Health Hospital
-034030,https://www.paloverdebh.com,Palo Verde Behavioral Health
-034033,https://www.eldoradospringsbh.com,El Dorado Springs
+ccn,website,location_name,website_source
+030002,https://www.bannerhealth.com,Banner University Medical Center Phoenix,dolthub
+030006,https://www.tmcaz.com,Tucson Medical Center,dolthub
+030007,https://www.nahealth.com,,known_system
+030010,https://www.carondelet.org,St. Mary's Hospital,web_search
+030011,https://www.carondelet.org,St. Joseph's Hospital,web_search
+030012,https://www.commonspirit.org,Yavapai Regional Medical Center (West),known_system
+030013,https://www.onvidahealth.org,,known_system
+030014,https://www.honorhealth.com,HonorHealth John C. Lincoln Medical Center,dolthub
+030016,https://www.bannerhealth.com,Banner Casa Grande Medical Center,dolthub
+030022,https://www.valleywisehealth.org,,known_system
+030023,https://www.nahealth.com,,known_system
+030024,https://www.commonspirit.org,St. Joseph’s Hospital and Medical Center,known_system
+030030,https://www.abrazohealth.com,,known_system
+030036,https://www.commonspirit.org,Chandler Regional Medical Center,known_system
+030037,https://www.honorhealth.com,HonorHealth Tempe Medical Center,known_system
+030038,https://www.honorhealth.com,HonorHealth Scottsdale Osborn Medical Center,dolthub
+030043,https://www.canyonvistamedicalcenter.com,Canyon Vista Medical Center,known_system
+030055,https://www.azkrmc.com,Kingman Regional Medical Center,known_system
+030061,https://www.bannerhealth.com,Banner Boswell Medical Center,dolthub
+030062,https://www.summithealthcare.net,Summit Healthcare Regional Medical Center,known_system
+030064,https://www.bannerhealth.com,Banner University Medical Center Tucson,dolthub
+030065,https://www.bannerhealth.com,Banner Desert Medical Center,dolthub
+030069,https://www.havasuregional.com,Havasu Regional Medical Center,known_system
+030073,https://tchealth.org,,known_system
+030083,https://www.abrazohealth.com,,known_system
+030085,https://www.healthiertucson.com,Northwest Medical Center,dolthub
+030087,https://www.honorhealth.com,HonorHealth Scottsdale Shea Medical Center,dolthub
+030088,https://www.bannerhealth.com,Banner Baywood Medical Center,dolthub
+030089,https://www.bannerhealth.com,Banner Thunderbird Medical Center,dolthub
+030092,https://www.honorhealth.com,HonorHealth Deer Valley Medical Center,dolthub
+030093,https://www.bannerhealth.com,Banner Del Webb Medical Center,dolthub
+030094,https://www.abrazohealth.com,,known_system
+030101,https://www.warmc.com,Western Arizona Regional Medical Center,dolthub
+030103,https://www.mayoclinic.org,Mayo Clinic Arizona,known_system
+030105,https://www.bannerhealth.com,Banner Heart Hospital,dolthub
+030107,https://www.azspineandjoint.com,,known_system
+030108,https://thecoreinstitutehospital.com,,web_search
+030110,https://www.abrazohealth.com,,known_system
+030111,https://www.bannerhealth.com,Banner University Medical Center South,dolthub
+030112,,,not_found
+030114,https://www.healthiertucson.com,Oro Valley Hospital,dolthub
+030115,https://www.bannerhealth.com,Banner Estrella Medical Center,dolthub
+030117,https://www.valleyviewmedicalcenter.net,Valley View Medical Center,dolthub
+030119,https://www.commonspirit.org,Mercy Gilbert Medical Center,known_system
+030121,https://www.honorhealth.com,HonorHealth Four Peaks Medical Center,known_system
+030122,https://www.bannerhealth.com,Banner Gateway Medical Center,dolthub
+030123,https://www.honorhealth.com,HonorHealth Scottsdale Thompson Peak Medical Center,dolthub
+030130,https://www.bannerhealth.com,Banner Ironwood Medical Center,dolthub
+030134,https://www.bannerhealth.com,Banner Goldfield Medical Center,dolthub
+030136,https://www.commonspirit.org,Arizona General Hospital Laveen,known_system
+030138,https://www.cityofhope.org,,web_search
+030139,https://www.commonspirit.org,Arizona General Hospital Mesa,known_system
+030146,https://www.honorhealth.com,HonorHealth Sonoran Crossing Medical Center,known_system
+030147,https://www.bannerhealth.com,Banner Ocotillo Medical Center,known_system
+030148,https://www.healthiertucson.com,Northwest Healthcare Sahuarita,web_search
+030152,https://www.ehc24.com,Exceptional Community Hospital Maricopa,web_search
+030153,https://www.eastvalleyhospital.com,East Valley ER & Hospital,known_system
+030154,https://www.ehc24.com,Exceptional Community Hospital Yuma,web_search
+030155,https://www.ehc24.com,Exceptional Community Hospital Bullhead City,web_search
+030196,https://www.ehc24.com,Exceptional Community Hospital Prescott,web_search
+031300,https://www.wickhosp.com,Wickenburg Community Hospital,web_search
+031301,https://www.bensonhospital.org,Benson Hospital,dolthub
+031302,https://www.ncch.com,Northern Cochise Community Hospital,known_system
+031304,https://www.bannerhealth.com,Banner Page Hospital,dolthub
+031309,https://sagememorial.com,,web_search
+031311,https://www.lcmcwmh.com,,dolthub
+031312,https://www.cqch.org,Copper Queen Community Hospital,known_system
+031313,https://www.carondelet.org,Holy Cross Hospital,known_system
+031314,https://www.cvrmc.org,Cobre Valley Regional Medical Center,known_system
+031315,https://www.wmrmc.com,,known_system
+031317,https://www.lapazhospital.org,,web_search
+031318,https://www.bannerhealth.com,Banner Payson Medical Center,dolthub
+031319,https://www.mtgraham.org,Mt Graham Regional Medical Center,known_system
+033302,https://www.phoenixchildrens.org,Phoenix Children's Hospital,dolthub
+034004,https://www.bannerhealth.com,Banner Behavioral Health Hospital,dolthub
+034013,https://www.cmcphoenix.com,College Medical Center Phoenix,known_system
+034020,https://www.havenofphoenix.com,,web_search
+034021,https://www.azdhs.gov,,known_system
+034022,https://www.sonorabehavioral.com,Sonora Behavioral Health Hospital,web_search
+034023,https://tgcaz.org,,known_system
+034024,https://www.auroraarizona.com,Aurora Behavioral Health - Glendale,web_search
+034025,https://www.polarahealth.com,The Healing Place,web_search
+034026,https://www.valleyhospital-phoenix.com,Valley Hospital,known_system
+034027,https://www.mychangepoint.org,Changepoint Psychiatric Hospital,web_search
+034028,https://www.auroraarizona.com,Aurora Behavioral Health - Tempe,web_search
+034029,https://www.obhhospital.com,Oasis Behavioral Health Hospital,web_search
+034030,https://www.paloverdebh.com,Palo Verde Behavioral Health,web_search
+034031,https://www.quailrunbehavioral.com,Quail Run Behavioral Health,known_system
+034032,https://www.coppersprings.com,Copper Springs East,known_system
+034033,https://www.eldoradospringsbh.com,El Dorado Springs,web_search
+034034,https://www.destinyspringshealthcare.com,Destiny Springs Healthcare,known_system
+034035,,,not_found
+034038,https://www.neuropsychiatrichospitals.net,"Phoenix Medical Psychiatric Hospital, LLC",web_search
+034040,https://www.vialindabehavioral.com,Via Linda Behavioral Hospital,known_system
+034041,https://www.agaveridgebehavioral.com,Agave Ridge Behavioral Hospital,web_search
