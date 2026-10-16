@@ -1,6 +1,8 @@
 # Arizona Price Transparency
 
-A data pipeline that collects the prices Arizona hospitals and health insurers are required to publish, validates and normalizes them, and serves a searchable price lookup with an AI query layer.
+A free, open, auditable price lookup for Pima County, Arizona: named hospitals, insurer-specific prices where they exist, and a data-quality score that explains every missing or percentage-only price.
+
+Behind it is a data pipeline that collects the prices hospitals and health insurers are required to publish, validates and normalizes them, and adds an AI query layer.
 
 **Status:** Phase 0, setup. Work in progress.
 
