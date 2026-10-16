@@ -1,3 +1,6 @@
+import gzip
+import io
+import zipfile
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -12,11 +15,14 @@ from ingest.hospitals.parse import (
     load_shoppable,
     match_codes,
     normalize_header,
+    outcome,
     parse_date,
     parse_file,
+    parse_one,
     pydantic_reason,
     read_csv_items,
     read_json,
+    sniff_format,
     to_long,
     validate,
 )
@@ -212,6 +218,59 @@ def test_fixtures_with_insurer_prices_produce_them(parsed):
     ccn, _, valid, _ = parsed
     if ccn in {"030006", "030064", "030085", "030111", "030114", "030148", "034033"}:
         assert valid.filter(pl.col("price_type").str.starts_with("negotiated")).height > 0
+
+
+def test_format_is_sniffed_from_content_not_name(tmp_path):
+    csv_gz, json_gz, zip_gz = tmp_path / "a.gz", tmp_path / "b.gz", tmp_path / "c.gz"
+    csv_gz.write_bytes(gzip.compress(b"\xef\xbb\xbfhospital_name,version\n"))
+    json_gz.write_bytes(gzip.compress(b'  {"hospital_name": "x"}'))
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as z:
+        z.writestr("prices.csv", "hospital_name\n")
+    zip_gz.write_bytes(gzip.compress(buffer.getvalue()))
+    assert [sniff_format(p) for p in (csv_gz, json_gz, zip_gz)] == ["csv", "json", "zip"]
+
+
+def test_zip_files_are_parsed_through_their_csv(tmp_path, monkeypatch):
+    monkeypatch.setattr("ingest.hospitals.parse.PARSED_DIR", tmp_path)
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as z:
+        z.writestr("readme.txt", "ignore me")
+        z.writestr("030006_standardcharges.csv", (FIXTURES / "030006.csv").read_bytes())
+    path = tmp_path / "030006_file.zip.gz"
+    path.write_bytes(gzip.compress(buffer.getvalue()))
+    meta, valid, _ = parse_file(path, SHOPPABLE)
+    assert meta["shape"] == "tall" and valid.height > 0
+    assert not list((tmp_path / "tmp").iterdir())  # the extracted copy is cleaned up
+
+
+@pytest.mark.parametrize(
+    ("counts", "expected"),
+    [
+        ({"valid": 100, "rejected": 0}, "parsed"),
+        ({"valid": 100, "rejected": 4}, "parsed"),
+        ({"valid": 100, "rejected": 10}, "partly_parsed"),
+        ({"valid": 0, "rejected": 7}, "all_rejected"),
+        ({"valid": 0, "rejected": 0}, "no_service_codes"),
+    ],
+)
+def test_outcome(counts, expected):
+    assert outcome(counts) == expected
+
+
+def test_a_broken_file_is_reported_not_raised(tmp_path, monkeypatch):
+    monkeypatch.setattr("ingest.hospitals.parse.PARSED_DIR", tmp_path)
+    path = tmp_path / "999999_broken.json.gz"
+    path.write_bytes(gzip.compress(b'{"standard_charge_information": [ not json'))
+    entry = parse_one("999999", path, SHOPPABLE)
+    assert entry["outcome"] == "failed" and "JSONDecodeError" in entry["error"]
+
+
+def test_files_too_big_for_memory_are_deferred(tmp_path, monkeypatch):
+    monkeypatch.setattr("ingest.hospitals.parse.MAX_CSV_BYTES", 10)
+    path = tmp_path / "030103_big.csv.gz"
+    path.write_bytes(gzip.compress(b"hospital_name,version\n" * 10))
+    assert parse_one("030103", path, SHOPPABLE)["outcome"] == "deferred_too_large"
 
 
 def test_carondelet_has_no_insurer_prices():

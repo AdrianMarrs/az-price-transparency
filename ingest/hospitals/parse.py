@@ -27,6 +27,8 @@ import gzip
 import io
 import json
 import re
+import traceback
+import zipfile
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -37,6 +39,10 @@ from pydantic import BaseModel, ValidationError, field_validator, model_validato
 
 RAW_DIR = Path("data/raw")
 PARSED_DIR = Path("data/parsed")
+# Files are read whole into memory. Larger ones are recorded as deferred until there is a
+# streaming parser; JSON expands far more in memory than CSV, so its limit is lower.
+MAX_CSV_BYTES = 3 * 10**9
+MAX_JSON_BYTES = 6 * 10**8
 SHOPPABLE_PATH = Path("warehouse/seeds/shoppable_services.csv")
 
 # CSV column (after header normalization) -> our column name
@@ -118,6 +124,8 @@ def read_csv_metadata(path: Path) -> dict:
         "hospital_name": meta.get("hospital_name"),
         "last_updated_on": parse_date(meta.get("last_updated_on")),
         "version": meta.get("version"),
+        # Header names as given (the attestation's name is its long text), for compliance.
+        "header_fields": sorted(k[:40] for k, v in meta.items() if v),
     }
 
 
@@ -178,7 +186,9 @@ def read_json(path: Path) -> tuple[dict, pl.DataFrame]:
         "hospital_name": doc.get("hospital_name"),
         "last_updated_on": parse_date(doc.get("last_updated_on")),
         "version": doc.get("version"),
-    }
+        "header_fields": sorted(k for k, v in doc.items()
+                                if v and k != "standard_charge_information"),
+    }  # fmt: skip
     return meta, json_items(doc)
 
 
@@ -436,13 +446,54 @@ def load_shoppable(path: Path = SHOPPABLE_PATH) -> pl.DataFrame:
     )
 
 
+def sniff_format(path: Path) -> str:
+    """'zip', 'json' or 'csv' from the file's first bytes (many URLs have no extension)."""
+    opener = gzip.open if path.suffix == ".gz" else open
+    with opener(path, "rb") as f:
+        head = f.read(4096)
+    if head.startswith(b"PK\x03\x04"):
+        return "zip"
+    text = head.lstrip(b"\xef\xbb\xbf \t\r\n")
+    return "json" if text[:1] in (b"{", b"[") else "csv"
+
+
+def original_size(path: Path) -> int:
+    """Uncompressed size of a .gz file from its trailer (exact below 4 GiB)."""
+    if path.suffix != ".gz":
+        return path.stat().st_size
+    with path.open("rb") as f:
+        f.seek(-4, 2)
+        return int.from_bytes(f.read(4), "little")
+
+
+def extract_zip(path: Path, work_dir: Path) -> Path:
+    """Extract the largest CSV or JSON member of a (possibly gzipped) zip file."""
+    opener = gzip.open if path.suffix == ".gz" else open
+    with opener(path, "rb") as f, zipfile.ZipFile(io.BytesIO(f.read())) as z:
+        members = [m for m in z.infolist() if m.filename.lower().endswith((".csv", ".json"))]
+        if not members:
+            raise ValueError("zip file contains no CSV or JSON file")
+        member = max(members, key=lambda m: m.file_size)
+        work_dir.mkdir(parents=True, exist_ok=True)
+        dest = work_dir / f"{path.name.split('.')[0]}_{Path(member.filename).name}"
+        dest.write_bytes(z.read(member))
+        return dest
+
+
 def parse_file(path: Path, shoppable: pl.DataFrame) -> tuple[dict, pl.DataFrame, pl.DataFrame]:
     """(metadata incl. counts, valid prices, rejects) for one raw file."""
-    if ".json" in path.name:
+    fmt = sniff_format(path)
+    if fmt == "zip":
+        extracted = extract_zip(path, PARSED_DIR / "tmp")
+        try:
+            return parse_file(extracted, shoppable)
+        finally:
+            extracted.unlink()
+    if fmt == "json":
         meta, items = read_json(path)
     else:
         meta, items = read_csv_metadata(path), read_csv_items(path)
-    meta["shape"] = "json" if ".json" in path.name else (
+    meta["shape"] = "json" if fmt == "json" else (
         "tall" if "payer_name" in items.columns else "wide")  # fmt: skip
     meta["items"] = items.height
     long = to_long(items, shoppable)
@@ -472,22 +523,69 @@ def main() -> None:
     shoppable = load_shoppable()
     ccns = args.ccn or sorted({p.name.split("_")[0] for p in RAW_DIR.glob("*/*.gz")})
     PARSED_DIR.mkdir(parents=True, exist_ok=True)
+    report = []
     for ccn in ccns:
         path = newest_file(ccn)
         if path is None:
             print(f"{ccn}  no raw file")
             continue
+        entry = parse_one(ccn, path, shoppable)
+        report.append(entry)
+        print(f"{ccn}  {entry['outcome']:17} {entry.get('shape') or '':5} "
+              f"items={entry.get('items') or 0:>9,}  prices={entry.get('valid') or 0:>9,}  "
+              f"rejected={entry.get('rejected') or 0:>6,}  {entry.get('error') or ''}")  # fmt: skip
+
+    # Merge with earlier runs so a --ccn run doesn't drop other hospitals' outcomes.
+    report_path = PARSED_DIR / "parse_report.csv"
+    new = pl.DataFrame(report, infer_schema_length=None).cast(pl.String)
+    if report_path.exists():
+        old = pl.read_csv(report_path, infer_schema_length=0)
+        new = pl.concat([old.filter(~pl.col("ccn").is_in(new["ccn"])), new], how="diagonal")
+    new.sort("ccn").write_csv(report_path)
+    print(new["outcome"].value_counts(sort=True))
+
+
+def outcome(meta: dict) -> str:
+    """parsed / partly_parsed / no_service_codes / all_rejected, from the parse counts."""
+    if meta["valid"] == 0:
+        return "all_rejected" if meta["rejected"] else "no_service_codes"
+    rejected_share = meta["rejected"] / (meta["valid"] + meta["rejected"])
+    return "partly_parsed" if rejected_share >= 0.05 else "parsed"
+
+
+def parse_one(ccn: str, path: Path, shoppable: pl.DataFrame) -> dict:
+    """Parse one hospital's newest file and write its outputs; never raises."""
+    entry = {"ccn": ccn, "path": path.as_posix(), "format": sniff_format(path)}
+    size = original_size(path)
+    limit = MAX_JSON_BYTES if entry["format"] == "json" else MAX_CSV_BYTES
+    if size > limit:
+        return entry | {"outcome": "deferred_too_large",
+                        "error": f"{size / 1e9:.1f} GB; needs a streaming parser"}  # fmt: skip
+    try:
         meta, valid, rejects = parse_file(path, shoppable)
-        valid = valid.with_columns(
-            pl.lit(ccn).alias("ccn"), pl.lit(path.as_posix()).alias("source_path")
-        )
-        valid.write_parquet(PARSED_DIR / f"{ccn}.parquet")
-        rejects.write_csv(PARSED_DIR / f"{ccn}_rejects.csv")
-        codes = valid["code"].n_unique()
-        cms = valid["cms_shoppable_id"].drop_nulls().n_unique()
-        print(f"{ccn}  {meta['shape']:5} items={meta['items']:>9,}  codes={codes:>6,}  "
-              f"cms70={cms:>2}  prices={meta['valid']:>9,}  dups={meta['duplicates']:>7,}  "
-              f"rejected={meta['rejected']:>5,}  updated={meta['last_updated_on']}")  # fmt: skip
+    except Exception as e:  # noqa: BLE001 - one bad file must not stop the run
+        last = traceback.format_exception_only(e)[-1].strip()
+        return entry | {"outcome": "failed", "error": last[:300]}
+    valid.with_columns(
+        pl.lit(ccn).alias("ccn"), pl.lit(path.as_posix()).alias("source_path")
+    ).write_parquet(PARSED_DIR / f"{ccn}.parquet")
+    rejects.write_csv(PARSED_DIR / f"{ccn}_rejects.csv")
+    top_reason = rejects["reason"].mode().first() if rejects.height else None
+    return entry | {
+        "outcome": outcome(meta),
+        "shape": meta["shape"],
+        "version": meta.get("version"),
+        "last_updated_on": meta.get("last_updated_on"),
+        "header_fields": "|".join(meta.get("header_fields", [])),
+        "items": meta["items"],
+        "price_rows": meta["price_rows"],
+        "duplicates": meta["duplicates"],
+        "valid": meta["valid"],
+        "rejected": meta["rejected"],
+        "codes": valid["code"].n_unique(),
+        "cms70": valid["cms_shoppable_id"].drop_nulls().n_unique(),
+        "top_reject_reason": top_reason,
+    }
 
 
 if __name__ == "__main__":
