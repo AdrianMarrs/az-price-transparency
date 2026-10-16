@@ -48,7 +48,34 @@ Nine rules per hospital ([`ingest/hospitals/compliance.py`](../ingest/hospitals/
 
 Statewide files use 820 insurer names. `dim_payer_plans` maps each payer + plan to a parent company (exact alias, else an ordered pattern) and a market (from patterns on payer and plan text, so a "Work Comp" plan under a commercial payer counts as workers' comp). Coverage: parent company for 90% of price rows, market for 80%. A dbt unit test pins the precedence rules.
 
+### The nine rules
+
+| Rule | Passes when |
+| --- | --- |
+| `cms_hpt_lists_hospital` | `cms-hpt.txt` at the website root names this hospital's price file |
+| `cms_hpt_machine_readable` | ...and a program can read it as-is: no bot challenge, no browser-only access, well-formed |
+| `price_file_downloads` | The price file it points to downloads (files too large for us to read still pass) |
+| `price_file_parses` | The file reads as a CMS template file |
+| `version_stated` | The header states a template version |
+| `header_fields_present` | Hospital name, date, version, location, address, license, type 2 NPI and attestation are filled in |
+| `payer_prices_present` | The whole file (every code) has at least one payer-specific negotiated charge |
+| `mostly_dollar_prices` | At least half of unbundled insurer prices are dollar amounts |
+| `updated_within_12_months` | `last_updated_on` is within the last year |
+
+A rule that can't be checked (no file obtained) is recorded as not checked, not as a pass, and `score_pct` counts only checked rules alongside how many that was.
+
 ## Orchestration
+
+**Why Dagster over Airflow.** Dagster models the pipeline as *assets* (the tables and files it produces) rather than tasks, which matches how this project is described: each step writes something you can look at. It reads the dbt project directly and turns every dbt model into an asset wired to its upstream Python assets, partitions per hospital are built in, and it runs locally with one command. Airflow is more common in job postings and is the alternative if a target employer uses it; the asset code would port to Airflow tasks, the dbt wiring would need Cosmos or similar.
+
+**Partitioning by hospital.** The unit of failure is one hospital's file, so the partition is the hospital (95 static partitions from the seed), not time. A file that fails to download or parse fails only its own run; the weekly schedule sends one run per hospital, and the local run queue caps concurrency at 3.
+
+**Failure handling.**
+
+- Within a file: rows that fail validation go to a rejects file with the reason; the file still loads.
+- Within a run: a file that can't be parsed raises in its own partition; files too large to read are recorded as deferred instead of failing.
+- Across runs: asset checks warn on a 30% row-count swing or a file older than a year; a run-failure sensor posts to a webhook; and the Redis lock stops overlapping runs downloading the same hospital.
+- Compliance findings (a blocked or missing file) are data, not pipeline failures: they are recorded and scored, and the run succeeds.
 
 [`orchestration/definitions.py`](../orchestration/definitions.py) defines the pipeline as Dagster assets:
 
