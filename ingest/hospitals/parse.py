@@ -132,8 +132,29 @@ def read_csv_metadata(path: Path) -> dict:
 # ---------- reading each shape into an item table ----------
 
 
+def read_csv_with_python(path: Path) -> pl.DataFrame:
+    """Slower fallback for files polars' parallel reader rejects (e.g. Kingman Regional:
+    'CSV malformed: expected 3024 rows, actual 3168 rows', from line breaks inside values)."""
+    with open_text(path) as f:
+        reader = csv.reader(f)
+        next(reader), next(reader)
+        header = next(reader)
+        width = len(header)
+        rows = [(row + [""] * width)[:width] for row in reader]
+    names = [h if h.strip() else f"_duplicated_blank_{i}" for i, h in enumerate(header)]
+    seen: dict[str, int] = {}
+    for i, name in enumerate(names):  # pl.DataFrame needs unique names; read_csv_items renames
+        seen[name] = seen.get(name, 0) + 1
+        if seen[name] > 1:
+            names[i] = f"{name}_duplicated_{seen[name] - 1}"
+    return pl.DataFrame(rows, schema=names, orient="row").with_columns(pl.all().replace("", None))
+
+
 def read_csv_items(path: Path) -> pl.DataFrame:
-    df = pl.read_csv(path, skip_rows=2, infer_schema_length=0, truncate_ragged_lines=True)
+    try:
+        df = pl.read_csv(path, skip_rows=2, infer_schema_length=0, truncate_ragged_lines=True)
+    except pl.exceptions.ComputeError:
+        df = read_csv_with_python(path)
     names, seen = [], set()
     for column in df.columns:
         name = normalize_header(column)
@@ -480,6 +501,32 @@ def extract_zip(path: Path, work_dir: Path) -> Path:
         return dest
 
 
+def file_payer_counts(items: pl.DataFrame) -> dict[str, int]:
+    """Insurer prices in the whole file, every code included (for compliance rules):
+    how many there are, how many give a dollar amount, how many are 'bundled'."""
+    if "payer_name" in items.columns:  # tall CSV or JSON
+        groups = [("standard_charge|negotiated_dollar", "standard_charge|negotiated_percentage",
+                   "standard_charge|negotiated_algorithm", present("payer_name"))]  # fmt: skip
+    else:
+        prefixes = {c.rsplit("|", 1)[0] for c in items.columns
+                    if c.startswith("standard_charge|") and c.count("|") == 3}  # fmt: skip
+        groups = [(f"{p}|negotiated_dollar", f"{p}|negotiated_percentage",
+                   f"{p}|negotiated_algorithm", pl.lit(True)) for p in sorted(prefixes)]  # fmt: skip
+    counts = {"file_payer_prices": 0, "file_payer_dollar": 0, "file_payer_bundled": 0}
+    for dollar, pct, algo, has_payer in groups:
+        has = {c: present(c) if c in items.columns else pl.lit(False) for c in (dollar, pct, algo)}
+        bundled = has[algo] & pl.col(algo).str.contains("(?i)bundled") if algo in items.columns \
+            else pl.lit(False)  # fmt: skip
+        row = items.select(
+            (has_payer & (has[dollar] | has[pct] | has[algo])).sum().alias("file_payer_prices"),
+            (has_payer & has[dollar]).sum().alias("file_payer_dollar"),
+            (has_payer & ~has[dollar] & bundled).sum().alias("file_payer_bundled"),
+        ).row(0, named=True)
+        for key in counts:
+            counts[key] += row[key] or 0
+    return counts
+
+
 def parse_file(path: Path, shoppable: pl.DataFrame) -> tuple[dict, pl.DataFrame, pl.DataFrame]:
     """(metadata incl. counts, valid prices, rejects) for one raw file."""
     fmt = sniff_format(path)
@@ -496,6 +543,7 @@ def parse_file(path: Path, shoppable: pl.DataFrame) -> tuple[dict, pl.DataFrame,
     meta["shape"] = "json" if fmt == "json" else (
         "tall" if "payer_name" in items.columns else "wide")  # fmt: skip
     meta["items"] = items.height
+    meta |= file_payer_counts(items)
     long = to_long(items, shoppable)
     # Chargemaster lines that differ only by the hospital's internal item number collapse
     # to identical rows once that number is dropped; keep one.
@@ -540,7 +588,9 @@ def main() -> None:
     new = pl.DataFrame(report, infer_schema_length=None).cast(pl.String)
     if report_path.exists():
         old = pl.read_csv(report_path, infer_schema_length=0)
-        new = pl.concat([old.filter(~pl.col("ccn").is_in(new["ccn"])), new], how="diagonal")
+        new = pl.concat(
+            [old.filter(~pl.col("ccn").is_in(new["ccn"].to_list())), new], how="diagonal"
+        )
     new.sort("ccn").write_csv(report_path)
     print(new["outcome"].value_counts(sort=True))
 
@@ -571,21 +621,36 @@ def parse_one(ccn: str, path: Path, shoppable: pl.DataFrame) -> dict:
     ).write_parquet(PARSED_DIR / f"{ccn}.parquet")
     rejects.write_csv(PARSED_DIR / f"{ccn}_rejects.csv")
     top_reason = rejects["reason"].mode().first() if rejects.height else None
-    return entry | {
-        "outcome": outcome(meta),
-        "shape": meta["shape"],
-        "version": meta.get("version"),
-        "last_updated_on": meta.get("last_updated_on"),
-        "header_fields": "|".join(meta.get("header_fields", [])),
-        "items": meta["items"],
-        "price_rows": meta["price_rows"],
-        "duplicates": meta["duplicates"],
-        "valid": meta["valid"],
-        "rejected": meta["rejected"],
-        "codes": valid["code"].n_unique(),
-        "cms70": valid["cms_shoppable_id"].drop_nulls().n_unique(),
-        "top_reject_reason": top_reason,
-    }
+    kinds = valid.select(
+        (pl.col("price_type") == "negotiated_dollar").sum().alias("n_dollar"),
+        (pl.col("price_type") == "negotiated_percentage").sum().alias("n_percentage"),
+        ((pl.col("price_type") == "negotiated_algorithm")
+         & ~pl.col("algorithm").str.contains("(?i)bundled").fill_null(False))
+        .sum().alias("n_algorithm"),
+        pl.col("algorithm").str.contains("(?i)bundled").fill_null(False).sum().alias("n_bundled"),
+    ).row(0, named=True)  # fmt: skip
+    return (
+        entry
+        | kinds
+        | {
+            "outcome": outcome(meta),
+            "shape": meta["shape"],
+            "version": meta.get("version"),
+            "last_updated_on": meta.get("last_updated_on"),
+            "header_fields": ";".join(meta.get("header_fields", [])),
+            "items": meta["items"],
+            "price_rows": meta["price_rows"],
+            "duplicates": meta["duplicates"],
+            "valid": meta["valid"],
+            "rejected": meta["rejected"],
+            "codes": valid["code"].n_unique(),
+            "cms70": valid["cms_shoppable_id"].drop_nulls().n_unique(),
+            "top_reject_reason": top_reason,
+            "file_payer_prices": meta["file_payer_prices"],
+            "file_payer_dollar": meta["file_payer_dollar"],
+            "file_payer_bundled": meta["file_payer_bundled"],
+        }
+    )
 
 
 if __name__ == "__main__":

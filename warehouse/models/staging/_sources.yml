@@ -11,3 +11,7 @@ sources:
           ingest/hospitals/load.py. Partitioned by state.
       - name: source_files
         description: Every download attempt of a hospital price file (ingest/hospitals/download.py).
+      - name: compliance_checks
+        description: >
+          One row per hospital x rule from ingest/hospitals/compliance.py. passed is null
+          when the rule couldn't be checked (no file to read).

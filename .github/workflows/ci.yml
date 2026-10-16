@@ -27,4 +27,5 @@ jobs:
       - name: dbt build on the test fixtures
         run: |
           uv run python scripts/load_fixtures.py
+          uv run python -m ingest.hospitals.compliance
           uv run dbt build --project-dir warehouse --profiles-dir warehouse

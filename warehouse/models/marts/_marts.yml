@@ -50,6 +50,14 @@ models:
       - name: amount
         description: Null only for negotiated_algorithm prices.
 
+  - name: hospital_compliance_scores
+    description: Percent of checkable price transparency rules each in-scope hospital passes.
+    columns:
+      - name: ccn
+        data_tests: [unique, not_null]
+      - name: rules_checked
+        data_tests: [not_null]
+
   - name: price_summary
     columns:
       - name: summary_key

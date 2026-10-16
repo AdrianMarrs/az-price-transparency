@@ -21,6 +21,7 @@ from ingest.hospitals.parse import (
     parse_one,
     pydantic_reason,
     read_csv_items,
+    read_csv_with_python,
     read_json,
     sniff_format,
     to_long,
@@ -271,6 +272,29 @@ def test_files_too_big_for_memory_are_deferred(tmp_path, monkeypatch):
     path = tmp_path / "030103_big.csv.gz"
     path.write_bytes(gzip.compress(b"hospital_name,version\n" * 10))
     assert parse_one("030103", path, SHOPPABLE)["outcome"] == "deferred_too_large"
+
+
+def test_file_level_payer_counts_include_codes_we_drop():
+    # Sonora bills by revenue code, so none of its prices survive the service-code filter,
+    # but its file does publish insurer prices.
+    meta, valid, _ = parse_file(FIXTURES / "034022.csv", SHOPPABLE)
+    assert valid.height == 0
+    assert meta["file_payer_prices"] > 0
+    assert meta["file_payer_dollar"] <= meta["file_payer_prices"]
+
+
+def test_tmc_bundled_rows_are_counted_at_file_level():
+    meta, _, _ = parse_file(FIXTURES / "030006.csv", SHOPPABLE)
+    assert meta["file_payer_bundled"] > 0
+
+
+@pytest.mark.parametrize("ccn", ["030006", "030085", "034030"])
+def test_python_csv_fallback_reads_the_same_as_polars(ccn):
+    path = FIXTURES / f"{ccn}.csv"
+    fast = pl.read_csv(path, skip_rows=2, infer_schema_length=0, truncate_ragged_lines=True)
+    slow = read_csv_with_python(path)
+    assert slow.height == fast.height
+    assert slow.select(fast.columns[:20]).equals(fast.select(fast.columns[:20]))
 
 
 def test_carondelet_has_no_insurer_prices():
