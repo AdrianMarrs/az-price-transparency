@@ -12,7 +12,7 @@ Phase 0 gives the project a reproducible local stack, automated checks on every 
 | Validation | pydantic | Typed models with clear error messages for rejected rows | Hand-written checks |
 | Warehouse | PostgreSQL 16 | System of record; widely used; dbt support is mature | DuckDB: simpler locally, may still be used for exploration |
 | Raw storage | Compressed files (local disk now, S3 later) | Hospitals overwrite their files, so every download is kept as evidence; files are cheaper and simpler than any database for this | MongoDB: cut, since DynamoDB already covers NoSQL in Phase 3 and Postgres `jsonb` covers nested JSON |
-| Cache | Redis 7 | Cache-aside in front of the API; cheap and well understood | In-process cache (doesn't survive Lambda cold starts) |
+| Locks and cache | Redis 7 (local) | Locks so two scheduled runs never fetch the same file; cache-aside for slow warehouse queries | ElastiCache in front of the API: not on the Free plan, needs a VPC, and DynamoDB is already fast. CloudFront caches the API instead |
 | Local services | Docker Compose | One command brings up Postgres and Redis, the same on any machine | Installing each database natively |
 | CI | GitHub Actions | Lint, format check and tests on every push and pull request | None needed beyond this yet |
 | Lint and format | ruff | One fast tool for both | flake8 + black |
