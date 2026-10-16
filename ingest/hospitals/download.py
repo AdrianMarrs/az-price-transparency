@@ -30,6 +30,9 @@ RAW_DIR = Path("data/raw")
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://pt:pt@localhost:5432/prices")
 ATTEMPTS = 4
 CHUNK = 1 << 20  # 1 MiB
+# Files larger than this (by Content-Length) are skipped and recorded: the parser holds a
+# file in memory, so these wait for a streaming parser (Mayo Clinic Arizona's is 21.5 GB).
+MAX_BYTES = 5 * 10**9
 
 SCHEMA_SQL = """
 CREATE SCHEMA IF NOT EXISTS raw;
@@ -123,10 +126,16 @@ def download_once(
             raise RetryableStatus(f"HTTP {response.status_code}")
         if response.status_code != 200:
             return {**row, "outcome": "failed", "error": f"HTTP {response.status_code}"}
+        length = int(response.headers.get("content-length") or 0)
+        if length > MAX_BYTES:
+            return {**row, "outcome": "skipped_too_large", "size_bytes": length,
+                    "error": f"{length / 1e9:.1f} GB is over the {MAX_BYTES / 1e9:.0f} GB limit"}  # fmt: skip
 
         fmt = file_format(url, response.headers.get("content-type", ""))
         day_dir.mkdir(parents=True, exist_ok=True)
-        dest = day_dir / f"{ccn}_{Path(httpx.URL(url).path).name}.gz"
+        # Some URLs have no file name (".../charges/export", ".../standardcharges-3/").
+        name = Path(httpx.URL(url).path).name or "file"
+        dest = day_dir / f"{ccn}_{name}.gz"
         sha256, size = stream_to_gzip(response, dest)
         row |= {
             "format": fmt,

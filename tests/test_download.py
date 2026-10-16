@@ -75,6 +75,23 @@ def test_same_checksum_deletes_the_new_copy(tmp_path):
     assert not list(day.glob("*.gz"))
 
 
+def test_files_over_the_size_limit_are_skipped_not_downloaded(tmp_path, monkeypatch):
+    monkeypatch.setattr("ingest.hospitals.download.MAX_BYTES", 10)
+    client = client_for(lambda r: httpx.Response(200, content=BODY))  # len(BODY) > 10
+    row = download_once(client, "030103", URL, tmp_path, None)
+    assert row["outcome"] == "skipped_too_large"
+    assert row["size_bytes"] == len(BODY)
+    assert not list(tmp_path.iterdir())
+
+
+def test_urls_without_a_file_name_still_get_one(tmp_path):
+    client = client_for(lambda r: httpx.Response(200, content=BODY))
+    row = download_once(client, "034013", "https://x.org/", tmp_path, None)
+    assert row["path"].endswith("034013_file.gz")
+    row = download_once(client, "034014", "https://x.org/standardcharges-3/", tmp_path, None)
+    assert row["path"].endswith("034014_standardcharges-3.gz")
+
+
 def test_plain_403_retries_as_browser(tmp_path):
     def handler(request):
         if "Mozilla" in request.headers["user-agent"]:
