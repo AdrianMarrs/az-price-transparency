@@ -1,0 +1,36 @@
+name: az_prices
+version: "0.1.0"
+profile: az_prices
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages", "logs"]
+
+models:
+  az_prices:
+    staging:
+      +schema: staging
+      +materialized: view
+    marts:
+      +schema: marts
+      +materialized: table
+
+seeds:
+  az_prices:
+    +schema: reference
+    # Codes with leading zeros (CCN 030006, DRG 008) must stay text, not become integers.
+    hospitals:
+      +column_types: {ccn: text, zip: text, phone: text}
+    hospital_npis:
+      +column_types: {ccn: text, npi: text, taxonomy_code: text}
+    hospital_websites:
+      +column_types: {ccn: text}
+    hospital_sources:
+      +column_types: {ccn: text}
+    shoppable_services:
+      +column_types: {code: text, service_id: int}
+    payer_aliases:
+      +column_types: {payer_name: text}

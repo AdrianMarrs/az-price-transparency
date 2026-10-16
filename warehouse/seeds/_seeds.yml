@@ -1,0 +1,20 @@
+version: 2
+
+seeds:
+  - name: hospitals
+    description: Pima County hospitals from CMS Hospital General Information (ingest/hospitals/hospital_list.py).
+    columns:
+      - name: ccn
+        data_tests: [unique, not_null]
+  - name: shoppable_services
+    description: CMS's 70 specified shoppable services (74 codes), Table 3 of the final rule (84 FR 65571).
+    columns:
+      - name: code
+        data_tests: [unique, not_null]
+  - name: payer_aliases
+    description: >
+      Hand-curated map from payer names as hospitals write them to a parent company and a
+      market. 'mixed' = one name covers several markets; 'unknown' = not yet identified.
+    columns:
+      - name: payer_name
+        data_tests: [unique, not_null]

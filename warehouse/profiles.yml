@@ -1,0 +1,15 @@
+# Connection settings. Values come from environment variables, with defaults that match
+# docker-compose.yml, so nothing secret is stored here. Run dbt from the repo root with:
+#   uv run dbt build --project-dir warehouse --profiles-dir warehouse
+az_prices:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('PGHOST', 'localhost') }}"
+      port: "{{ env_var('PGPORT', '5432') | int }}"
+      user: "{{ env_var('PGUSER', 'pt') }}"
+      password: "{{ env_var('PGPASSWORD', 'pt') }}"
+      dbname: "{{ env_var('PGDATABASE', 'prices') }}"
+      schema: analytics
+      threads: 4

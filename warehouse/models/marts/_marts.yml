@@ -1,0 +1,58 @@
+version: 2
+
+models:
+  - name: dim_hospitals
+    columns:
+      - name: ccn
+        description: CMS Certification Number
+        data_tests: [unique, not_null]
+
+  - name: dim_payers
+    columns:
+      - name: payer_name
+        data_tests: [unique, not_null]
+      - name: is_mapped
+        description: False when payer_aliases.csv has no row for this name yet.
+        data_tests:
+          - accepted_values:
+              arguments: {values: [true]}
+              config: {severity: warn}
+      - name: market
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [commercial, medicare_advantage, medicare_ffs, medicaid, exchange,
+                         military_va, workers_comp, network_rental, travel_international,
+                         employer_direct, specialty_network, behavioral_health, tribal,
+                         correctional, self_pay, mixed, other, unknown, unmapped]
+
+  - name: dim_services
+    columns:
+      - name: service_key
+        data_tests: [unique, not_null]
+
+  - name: fct_prices
+    columns:
+      - name: price_id
+        data_tests: [unique, not_null]
+      - name: ccn
+        data_tests:
+          - relationships:
+              arguments: {to: ref('dim_hospitals'), field: ccn}
+      - name: service_key
+        data_tests:
+          - relationships:
+              arguments: {to: ref('dim_services'), field: service_key}
+      - name: payer_name
+        data_tests:
+          - relationships:
+              arguments: {to: ref('dim_payers'), field: payer_name}
+      - name: amount
+        description: Null only for negotiated_algorithm prices.
+
+  - name: price_summary
+    columns:
+      - name: summary_key
+        data_tests: [unique, not_null]
+      - name: prices
+        data_tests: [not_null]

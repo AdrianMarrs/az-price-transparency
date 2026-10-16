@@ -221,3 +221,8 @@ __marimo__/
 
 # Project data (downloads, parquet)
 data/
+
+# dbt build output
+warehouse/target/
+warehouse/logs/
+warehouse/dbt_packages/

@@ -1,0 +1,149 @@
+payer_name,payer_group,market,notes
+Aetna,Aetna,mixed,"11 plans; split by plan name later"
+Aetna Performance,Aetna,commercial,
+Aetna QHP,Aetna,exchange,QHP = ACA marketplace plan
+NODE Aetna MCR ADV,Aetna,medicare_advantage,
+ALLWELL_MGD,Centene,medicare_advantage,Allwell is Centene's Medicare Advantage brand
+ALLWELL_MGG,Centene,medicare_advantage,
+AMBETTER_HEALTH_CPD,Centene,exchange,Ambetter is Centene's marketplace brand
+AMBETTER_HEALTH_CPG,Centene,exchange,
+NODE AZ Complete Health Ambetter Exchange,Centene,exchange,
+Arizona Complete,Centene,mixed,Arizona Complete Health (Centene); 3 plans
+Complete Health Medicaid AZ,Centene,medicaid,
+Celtic (aka Centene),Centene,commercial,
+Health Net,Centene,mixed,Health Net is a Centene subsidiary; 4 plans
+Managed Health Network,Centene,behavioral_health,Health Net's behavioral health arm
+Managed Health Commercial,Centene,behavioral_health,
+Wellcare,Centene,medicare_advantage,Wellcare is Centene's Medicare brand
+Wellcare MCR ADV,Centene,medicare_advantage,
+NODE Wellcare MCR ADV,Centene,medicare_advantage,
+Care 1st,Centene,medicaid,Care1st Health Plan Arizona (Wellcare/Centene)
+ANTHEM_BCBS_MGG,Elevance,mixed,
+ANTHEM_BCBS_MSD,Elevance,mixed,
+Wellpoint (fka Amerigroup),Elevance,mixed,
+CareMore/Carelon/Wellpoint,Elevance,mixed,
+CareMore Health Plan,Elevance,medicare_advantage,
+NODE CareMore MCR ADV,Elevance,medicare_advantage,
+Beacon Health Options,Elevance,behavioral_health,Now Carelon Behavioral Health
+BCBS AZ,Blue Cross Blue Shield of Arizona,commercial,
+BCBS_ARIZONA_MGG,Blue Cross Blue Shield of Arizona,mixed,
+BCBS AZ PPO HMO NBR,Blue Cross Blue Shield of Arizona,commercial,
+BCBS AZ Pima Connect,Blue Cross Blue Shield of Arizona,commercial,Pima Connect is a narrow network
+BCBS PimaConnect,Blue Cross Blue Shield of Arizona,commercial,
+Blue Cross Blue Shield of Arizona,Blue Cross Blue Shield of Arizona,mixed,8 plans
+BCBSAZ MCR ADV,Blue Cross Blue Shield of Arizona,medicare_advantage,
+NODE BCBS AZ MCR ADV,Blue Cross Blue Shield of Arizona,medicare_advantage,
+Blue Cross/Health Choice,Blue Cross Blue Shield of Arizona,mixed,Health Choice is BCBSAZ's Medicaid and marketplace arm
+"Health Choice Arizona, Inc.",Blue Cross Blue Shield of Arizona,mixed,
+Health Choice Medicaid AZ,Blue Cross Blue Shield of Arizona,medicaid,
+NODE Health Choice Exchange,Blue Cross Blue Shield of Arizona,exchange,
+NODE Health Choice Health Exchange,Blue Cross Blue Shield of Arizona,exchange,
+Blue Cross Blue Shield,Blue Cross Blue Shield (unspecified),mixed,Plan not named; likely BCBSAZ but not stated
+CHS Group Health Plan BCBST,Blue Cross Blue Shield of Tennessee,employer_direct,Employee plan administered by BCBS of Tennessee
+Banner Health,Banner Health Plans,unknown,
+Banner MCR ADV,Banner Health Plans,medicare_advantage,
+NODE Banner MCR ADV,Banner Health Plans,medicare_advantage,
+Banner UFC Medicaid AZ,Banner Health Plans,medicaid,UFC = University Family Care
+Banner University Family Care,Banner Health Plans,medicaid,
+Banner University Health Plan,Banner Health Plans,mixed,3 plans
+Cigna,Cigna,commercial,
+"Cigna Healthcare of Arizona, Inc.",Cigna,commercial,
+Cigna HMO,Cigna,commercial,
+Cigna LocalFlex,Cigna,commercial,
+Cigna Local Plus,Cigna,commercial,
+NODE Cigna Healthspring MCR ADV,Healthspring,medicare_advantage,Cigna's former Medicare business
+Humana,Humana,mixed,3 plans
+HUMANA_MGG,Humana,mixed,
+Humana MCR ADV,Humana,medicare_advantage,
+NODE Humana MCR ADV,Humana,medicare_advantage,
+HUMANA_BEHAVIOR_HEALTH_MGC,Humana,behavioral_health,
+HUMANA_BEHAVIOR_HEALTH_MGD,Humana,behavioral_health,
+HUMANA_BEHAVIOR_HEALTH_MGG,Humana,behavioral_health,
+UHC,UnitedHealthcare,commercial,
+UHC Navigate,UnitedHealthcare,commercial,
+United Healthcare,UnitedHealthcare,mixed,7 plans
+UHC Health Exchange,UnitedHealthcare,exchange,
+UHC HIX,UnitedHealthcare,exchange,HIX = health insurance exchange
+UHC MCR ADV,UnitedHealthcare,medicare_advantage,
+NODE UHC Behavioral MCR ADV,UnitedHealthcare,medicare_advantage,
+United Healthcare Community Care,UnitedHealthcare,medicaid,
+APIPA Medicaid AZ,UnitedHealthcare,medicaid,APIPA = Arizona Physicians IPA (UnitedHealthcare Community Plan)
+Arizona Physicians IPA,UnitedHealthcare,medicaid,
+NODE APIPA UHC Community Plan MCR ADV,UnitedHealthcare,medicare_advantage,
+United Behavioral Health,UnitedHealthcare,behavioral_health,Optum Behavioral Health
+Optum,UnitedHealthcare,behavioral_health,
+OptumHealth,UnitedHealthcare,behavioral_health,
+Mercy Care,Mercy Care,medicaid,"Arizona Medicaid plan; 5 plans, some may be Medicare dual"
+Mercy Care Medicaid AZ,Mercy Care,medicaid,
+Magellan,Magellan,behavioral_health,
+Magellan Medicaid AZ,Magellan,medicaid,
+AZ Medicaid,AHCCCS fee-for-service,medicaid,AHCCCS = Arizona Medicaid
+AZ Medicaid Non Par,AHCCCS fee-for-service,medicaid,
+Medicaid,AHCCCS fee-for-service,medicaid,
+NON PAR Medicaid AZ,AHCCCS fee-for-service,medicaid,
+NODE Medicare Traditional,Medicare fee-for-service,medicare_ffs,
+NODE Medicare Non Par,Medicare fee-for-service,medicare_ffs,
+Devoted,Devoted Health,medicare_advantage,
+Devoted Health Services,Devoted Health,medicare_advantage,
+DEVOTED_HEALTH_MGD,Devoted Health,medicare_advantage,
+DEVOTED_HEALTH_MGG,Devoted Health,medicare_advantage,
+NODE Devoted Health MCR ADV,Devoted Health,medicare_advantage,
+Alignment,Alignment Health,medicare_advantage,
+Clover Health MCR ADV,Clover Health,medicare_advantage,
+NODE Clover Health MCR ADV,Clover Health,medicare_advantage,
+Scan Health,SCAN Health Plan,medicare_advantage,
+Scan Health Plan,SCAN Health Plan,medicare_advantage,
+Gold Kidney Health Plan,Gold Kidney Health Plan,medicare_advantage,Special needs plan for kidney disease
+Arizona Priority Care,Arizona Priority Care,unknown,
+Kaiser Foundation Health Plan,Kaiser Permanente,commercial,Out-of-area members
+UPMC Health Plan,UPMC Health Plan,commercial,Out-of-state members
+Oscar Health Plan,Oscar Health,exchange,
+Department of Veterans Affairs,VA Community Care,military_va,
+NODE VA,VA Community Care,military_va,
+VETERANS_ADMINISTRATION_CPD,VA Community Care,military_va,
+VETERANS_ADMINISTRATION_CPG,VA Community Care,military_va,
+TriWest,VA Community Care,military_va,TriWest administers VA community care
+TriWest Healthcare Alliance Corp - VA CCN,VA Community Care,military_va,
+NODE TriWest,VA Community Care,military_va,
+VA_TRIWEST_CPG,VA Community Care,military_va,
+Veterans Eval Services,VA Community Care,military_va,VA disability exam contractor
+NODE Tricare,TRICARE,military_va,
+Coventry Work Comp AL,Coventry (workers' comp),workers_comp,
+NODE US Dept of Labor,US Department of Labor,workers_comp,Federal employees' workers' comp
+Multiplan,MultiPlan,network_rental,Rents its provider network to other plans
+MULTIPLAN_CPC,MultiPlan,network_rental,
+PHCS/MULTIPLAN_CPC,MultiPlan,network_rental,
+First Health Coventry,First Health,network_rental,
+FIRST_HEALTH_CPC,First Health,network_rental,
+Coventry Medical Center,First Health,network_rental,
+BEECH_STREET_CPC,MultiPlan,network_rental,Beech Street was acquired by MultiPlan
+HealthSmart,HealthSmart,network_rental,
+Prime Health,Prime Health Services,network_rental,
+Provider Network of America,Provider Network of America,network_rental,
+PROVIDER_NETWORK_AMERICA_CPC,Provider Network of America,network_rental,
+ZELIS_CPC,Zelis,network_rental,
+ZELIS_CPD,Zelis,network_rental,
+VELOCITY_NATIONAL_PRO_NTWK_MGG,Velocity National Provider Network,network_rental,
+MEDINCREASE_HP_CPC,MedIncrease Health Plans,unknown,
+Arizona Medical Network,Arizona Medical Network,unknown,
+NODE Fusion Network,Fusion Network,unknown,
+Three Rivers,Three Rivers Provider Network,network_rental,
+Plotkin Health,Plotkin Health,unknown,
+National Healthcare Solutions Inc (NHSI) and VIP Universal Medical Insurance Group (VUMI),VUMI,travel_international,
+Seven Corners,Seven Corners,travel_international,Travel insurance
+SEVEN_CORNERS_MGG,Seven Corners,travel_international,
+Quiktrip Corporation,QuikTrip,employer_direct,Employer contracts directly with the hospital
+University of Arizona (Kasser Medical Treatment Center),University of Arizona,unknown,
+BridgeHealth Medical,BridgeHealth,employer_direct,Surgery bundles for self-insured employers
+"Emerging Therapy Solutions, Inc",Emerging Therapy Solutions,specialty_network,Transplant and specialty network
+Fresenius Health,Fresenius,specialty_network,Kidney care
+Carekin,Carekin,unknown,
+Gila River Health Care Corporation,Gila River Health Care,tribal,
+Pascua Yaqui Tribe,Pascua Yaqui Tribe,tribal,
+NODE J Allen Inmate Health Svcs,Correctional health,correctional,
+"NaphCare, Inc.",Correctional health,correctional,
+NODE Non Par Hospice Agree,Hospice agreements,other,
+Soulistic Hospice,Hospice agreements,other,
+MTC,MTC,unknown,
+ONE_CARE_MGG,One Care,unknown,
+Self Pay,Self pay,self_pay,Not an insurer; compare with the discounted cash price instead

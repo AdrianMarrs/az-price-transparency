@@ -1,0 +1,27 @@
+version: 2
+
+models:
+  - name: stg_hospital_charges
+    description: Hospital prices with a row key, a service key and a bundled flag.
+    columns:
+      - name: price_id
+        data_tests: [unique, not_null]
+      - name: ccn
+        data_tests: [not_null]
+      - name: service_key
+        description: "code_type:code, e.g. CPT/HCPCS:73721 or MS-DRG:470"
+        data_tests: [not_null]
+      - name: code_type
+        data_tests:
+          - accepted_values:
+              arguments: {values: ["CPT/HCPCS", "MS-DRG"]}
+      - name: setting
+        data_tests:
+          - accepted_values:
+              arguments: {values: ["inpatient", "outpatient", "both"]}
+      - name: price_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [gross, discounted_cash, min, max, negotiated_dollar,
+                         negotiated_percentage, negotiated_algorithm]
