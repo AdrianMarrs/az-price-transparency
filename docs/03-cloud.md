@@ -98,6 +98,10 @@ uv run dagster dev -m orchestration.definitions
 
 `aws login` credentials need botocore's CRT extension, so the dependency is `boto3[crt]`.
 
+## DynamoDB table
+
+`az-price-transparency-prices` (`infra/main/dynamodb.tf`): on-demand, with the `by_service` index, as designed above. No point-in-time recovery (billed per GB; the export rebuilds it) and no deletion protection, so `terraform destroy` still removes everything. Empty until the export step.
+
 ## Blocked: GitHub Actions to AWS (OIDC)
 
 The deploy role is written (local branch `oidc-blocked`: `infra/bootstrap/github_oidc.tf` and `.github/workflows/deploy.yml`) but can't be applied: a service control policy in the AWS Organization this account belongs to denies every IAM OpenID Connect provider action, even listing them. It has to be changed from the organization's management account. Until then, Terraform is applied from a laptop.
