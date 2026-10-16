@@ -34,6 +34,28 @@ Downloaded 2026-10-16. Numbers come from `scripts/profile_raw_files.py`.
 4. **El Dorado Springs lists only 23 items**, and 43% of its payer prices have no dollar amount.
 5. **Sonora's file is mostly drugs:** 7,964 of 8,792 rows carry only an NDC code, and only 1,726 payer prices exist across its 130 payer-plans.
 
+## Shoppable services found (parser, 2026-10-16)
+
+Measured against CMS's 70 specified shoppable services (74 codes, `warehouse/seeds/shoppable_services.csv`).
+
+| CCN | Hospital | Services found | Valid prices | Duplicates dropped | Rejected |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 030006 | Tucson Medical Center | 70 | 3,858 | 67 | 0 |
+| 030085 | Northwest Medical Center | 52 | 4,642 | 3,224 | 0 |
+| 030064 | Banner UMC Tucson | 50 | 4,601 | 1,736 | 0 |
+| 030114 | Oro Valley Hospital | 50 | 4,812 | 3,454 | 0 |
+| 030148 | Northwest Sahuarita | 50 | 3,381 | 2,344 | 62 |
+| 030111 | Banner UMC South | 45 | 4,017 | 544 | 0 |
+| 030010 | St. Mary's | 35 | 198 (list and cash only) | 0 | 0 |
+| 030011 | St. Joseph's | 32 | 194 (list and cash only) | 0 | 0 |
+| 034033 | El Dorado Springs | 5 | 350 | 0 | 0 |
+| 034022 | Sonora Behavioral Health | 0 | 0 | 0 | 0 |
+| 034030 | Palo Verde Behavioral Health | 0 | 0 | 0 | 0 |
+
+- **The two psychiatric hospitals match none of the 70**: they bill by revenue code (per-diem room and board) and drug code, and the CMS list is CPT- and DRG-based. A lookup site needs a separate view for behavioral health.
+- **Sahuarita's rejects are a data error in the file**: the plan "NODE Devoted Health MCR ADV" has a blank payer name in its column header, so its negotiated prices cannot be attributed.
+- **Duplicates** are chargemaster lines that differ only by the hospital's internal item number (CDM); once that is dropped they are identical in every price-relevant field.
+
 ## Quirks the parser must handle (each becomes a test case)
 
 - **Column order differs** between files (Banner puts `modifiers` after `plan_name`; El Dorado puts `standard_charge|min`/`max` at the end). Read columns by name, never by position.
