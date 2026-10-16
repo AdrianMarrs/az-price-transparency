@@ -34,27 +34,32 @@ Downloaded 2026-10-16. Numbers come from `scripts/profile_raw_files.py`.
 4. **El Dorado Springs lists only 23 items**, and 43% of its payer prices have no dollar amount.
 5. **Sonora's file is mostly drugs:** 7,964 of 8,792 rows carry only an NDC code, and only 1,726 payer prices exist across its 130 payer-plans.
 
-## Shoppable services found (parser, 2026-10-16)
+## What the parser keeps (2026-10-16)
 
-Measured against CMS's 70 specified shoppable services (74 codes, `warehouse/seeds/shoppable_services.csv`).
+**Decision: keep every service code, flag the CMS 70.** Filtering to CMS's 70 specified shoppable services (74 codes) kept only 26,115 prices, 0.75% of the usable data, and left out common services such as a knee MRI with contrast (73722), knee replacement as outpatient surgery (27447) and screening colonoscopy (G0121). Keeping every CPT, HCPCS and MS-DRG code would keep 3.5M prices, but 45% of those are supplies and devices and another 8% drugs and miscellaneous codes, which nobody shops for on their own.
 
-| CCN | Hospital | Services found | Valid prices | Duplicates dropped | Rejected |
-| --- | --- | ---: | ---: | ---: | ---: |
-| 030006 | Tucson Medical Center | 70 | 3,858 | 67 | 0 |
-| 030085 | Northwest Medical Center | 52 | 4,642 | 3,224 | 0 |
-| 030064 | Banner UMC Tucson | 50 | 4,601 | 1,736 | 0 |
-| 030114 | Oro Valley Hospital | 50 | 4,812 | 3,454 | 0 |
-| 030148 | Northwest Sahuarita | 50 | 3,381 | 2,344 | 62 |
-| 030111 | Banner UMC South | 45 | 4,017 | 544 | 0 |
-| 030010 | St. Mary's | 35 | 198 (list and cash only) | 0 | 0 |
-| 030011 | St. Joseph's | 32 | 194 (list and cash only) | 0 | 0 |
-| 034033 | El Dorado Springs | 5 | 350 | 0 | 0 |
-| 034022 | Sonora Behavioral Health | 0 | 0 | 0 | 0 |
-| 034030 | Palo Verde Behavioral Health | 0 | 0 | 0 | 0 |
+So the parser keeps **services people get**: CPT codes (procedures, tests, imaging, visits), HCPCS G codes and MS-DRGs (inpatient stays), and flags the 70 in `cms_shoppable_id`. Supplies (HCPCS A, C, E, K, L), drugs (J), miscellaneous codes and hospital-internal codes are dropped.
 
-- **The two psychiatric hospitals match none of the 70**: they bill by revenue code (per-diem room and board) and drug code, and the CMS list is CPT- and DRG-based. A lookup site needs a separate view for behavioral health.
+| CCN | Hospital | Codes | Of CMS's 70 | Valid prices | Duplicates dropped | Rejected |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| 030064 | Banner UMC Tucson | 4,934 | 50 | 369,274 | 84,477 | 0 |
+| 030006 | Tucson Medical Center | 10,754 | 70 | 298,789 | 5,130 | 0 |
+| 030111 | Banner UMC South | 3,417 | 45 | 265,609 | 36,263 | 0 |
+| 030085 | Northwest Medical Center | 3,389 | 52 | 262,425 | 111,188 | 0 |
+| 030114 | Oro Valley Hospital | 2,943 | 50 | 246,541 | 119,550 | 0 |
+| 030148 | Northwest Sahuarita | 2,573 | 50 | 155,176 | 80,040 | 3,057 |
+| 030011 | St. Joseph's | 1,502 | 32 | 5,592 (list and cash only) | 0 | 0 |
+| 030010 | St. Mary's | 1,445 | 35 | 5,440 (list and cash only) | 0 | 0 |
+| 034033 | El Dorado Springs | 11 | 5 | 356 | 0 | 0 |
+| 034022 | Sonora Behavioral Health | 0 | 0 | 0 | 0 | 0 |
+| 034030 | Palo Verde Behavioral Health | 0 | 0 | 0 | 0 | 0 |
+| | **Total** | | | **1,609,202** | **436,648** | **3,057** |
+
+All 11 files parse in about 13 seconds; the output is 6 MB of Parquet.
+
+- **The two psychiatric hospitals have no service codes at all**: they bill by revenue code (per-diem room and board) and drug code. A lookup site needs a separate view for behavioral health.
 - **Sahuarita's rejects are a data error in the file**: the plan "NODE Devoted Health MCR ADV" has a blank payer name in its column header, so its negotiated prices cannot be attributed.
-- **Duplicates** are chargemaster lines that differ only by the hospital's internal item number (CDM); once that is dropped they are identical in every price-relevant field.
+- **Duplicates** are chargemaster lines that differ only by the hospital's internal item number (CDM); once that is dropped they are identical in every price-relevant field. In the Northwest files they are about a third of all rows.
 
 ## Quirks the parser must handle (each becomes a test case)
 

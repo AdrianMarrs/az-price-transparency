@@ -1,4 +1,4 @@
-"""Parse a hospital price file into one long, validated table of shoppable-service prices.
+"""Parse a hospital price file into one long, validated table of service prices.
 
 Usage:
     uv run python -m ingest.hospitals.parse [--ccn 030006 ...]
@@ -11,9 +11,14 @@ failed validation, with the reason). Handles the three CMS template shapes:
 - CSV wide: one row per item, a column group per payer and plan
 - JSON: items with code_information and standard_charges[].payers_information[]
 
-Only items carrying one of the CMS-specified shoppable service codes are kept; the
-columns that change a price (setting, billing class, modifiers, payer, plan,
-methodology) are never dropped. See docs/01-hospitals.md for the quirks handled here.
+Only items carrying a service code are kept: a CPT code (procedures, tests, imaging,
+visits), a HCPCS G code, or an MS-DRG (inpatient stays). Supplies, devices, drugs and
+hospital-internal codes are dropped. The 70 CMS-specified shoppable services are flagged
+in cms_shoppable_id. The columns that change a price (setting, billing class, modifiers,
+payer, plan, methodology) are never dropped. See docs/01-hospitals.md for the quirks.
+
+Validation runs as polars expressions over all rows (fast); PriceRow, the pydantic model,
+is the readable specification of the same rules, and tests check that the two agree.
 """
 
 import argparse
@@ -53,7 +58,8 @@ PAYER_FIELDS = {
 }
 ITEM_PRICES = ["gross", "discounted_cash", "min", "max"]
 PAYER_PRICES = ["negotiated_dollar", "negotiated_percentage"]
-KEYS = ["description", "code", "code_type", "service_id", "setting", "billing_class", "modifiers"]
+KEYS = ["description", "code", "code_type", "cms_shoppable_id", "setting", "billing_class",
+        "modifiers"]  # fmt: skip
 OUTPUT_COLUMNS = [*KEYS, "payer_name", "plan_name", "methodology", "price_type", "amount",
                   "algorithm"]  # fmt: skip
 
@@ -64,6 +70,8 @@ PriceType = Literal[
 Methodology = Literal[
     "case rate", "fee schedule", "percent of total billed charges", "per diem", "other"
 ]
+SETTINGS = ["inpatient", "outpatient", "both"]
+METHODOLOGIES = list(Methodology.__args__)
 
 
 # ---------- headers and metadata ----------
@@ -73,7 +81,7 @@ def normalize_header(header: str) -> str:
     """'standard_charge|[payer_AETNA ]|[plan_ HMO/PPO]|negotiated_dollar ' ->
     'standard_charge|AETNA|HMO/PPO|negotiated_dollar'. Field names are lowercased;
     payer and plan names keep their case."""
-    parts = [p.strip() for p in header.replace("﻿", "").split("|")]
+    parts = [p.strip() for p in header.replace("\ufeff", "").split("|")]
     parts = [re.sub(r"^\[(payer|plan)_\s*|\s*\]$", "", p).strip() for p in parts]
     parts[0] = parts[0].lower()
     if parts[0] in {"standard_charge", "code"} or len(parts) <= 2:
@@ -174,10 +182,13 @@ def read_json(path: Path) -> tuple[dict, pl.DataFrame]:
     return meta, json_items(doc)
 
 
-# ---------- shoppable matching ----------
+# ---------- service codes ----------
 
 
 CODE_FAMILIES = {"CPT": "CPT/HCPCS", "HCPCS": "CPT/HCPCS", "MSDRG": "MS-DRG"}
+# CPT Level I codes are five digits; HCPCS G codes are procedures and services. Other
+# HCPCS letters are supplies (A, C, E, K, L), drugs (J) and miscellaneous codes.
+SERVICE_CODE = r"^(\d{5}|G\d{4})$"
 
 
 def code_family(column: str) -> pl.Expr:
@@ -190,14 +201,17 @@ def code_family(column: str) -> pl.Expr:
     )
 
 
-def match_shoppable(items: pl.DataFrame, shoppable: pl.DataFrame) -> pl.DataFrame:
-    """row_idx -> (code, code_type, service_id) for items carrying a shoppable code."""
+def match_codes(items: pl.DataFrame, shoppable: pl.DataFrame) -> pl.DataFrame:
+    """row_idx -> (code, code_type, cms_shoppable_id) for items carrying a service code.
+
+    cms_shoppable_id is set when the code is one of CMS's 70 shoppable services."""
     numbers = sorted(
         {int(m.group(1)) for c in items.columns if (m := re.match(r"code\|(\d+)$", c))}
     )
     if not numbers:
         return pl.DataFrame(schema={"row_idx": pl.UInt32, "code": pl.String,
-                                    "code_type": pl.String, "service_id": pl.Int64})  # fmt: skip
+                                    "code_type": pl.String,
+                                    "cms_shoppable_id": pl.Int64})  # fmt: skip
     codes = pl.concat(
         [
             items.select(
@@ -216,7 +230,10 @@ def match_shoppable(items: pl.DataFrame, shoppable: pl.DataFrame) -> pl.DataFram
         .otherwise(pl.col("code").str.to_uppercase())
         .alias("code")
     )
-    return codes.join(shoppable, on=["code", "code_type"]).unique(["row_idx", "code"])
+    codes = codes.filter(
+        (pl.col("code_type") == "MS-DRG") | pl.col("code").str.contains(SERVICE_CODE)
+    )
+    return codes.join(shoppable, on=["code", "code_type"], how="left").unique(["row_idx", "code"])
 
 
 # ---------- to long price rows ----------
@@ -255,7 +272,7 @@ def payer_rows_wide(matched: pl.DataFrame) -> pl.DataFrame:
 
 def to_long(items: pl.DataFrame, shoppable: pl.DataFrame) -> pl.DataFrame:
     items = ensure(items.with_row_index("row_idx"), list(ITEM_COLUMNS))
-    matched = items.join(match_shoppable(items, shoppable), on="row_idx")
+    matched = items.join(match_codes(items, shoppable), on="row_idx")
     matched = matched.rename({src: dst for src, dst in ITEM_COLUMNS.items()})
 
     item_prices = (
@@ -296,10 +313,13 @@ def to_long(items: pl.DataFrame, shoppable: pl.DataFrame) -> pl.DataFrame:
 
 
 class PriceRow(BaseModel):
+    """The rules one price row must meet, written out readably. validate() applies the
+    same rules to whole columns at once; tests check that both accept the same rows."""
+
     description: str
     code: str
     code_type: Literal["CPT/HCPCS", "MS-DRG"]
-    service_id: int
+    cms_shoppable_id: int | None = None
     setting: Literal["inpatient", "outpatient", "both"]
     billing_class: str | None = None
     modifiers: str | None = None
@@ -346,32 +366,73 @@ class PriceRow(BaseModel):
         return self
 
 
+def pydantic_reason(row: dict) -> str | None:
+    """None if PriceRow accepts the row, else its error message (used by tests)."""
+    try:
+        PriceRow(**row)
+        return None
+    except ValidationError as e:
+        return "; ".join(err["msg"] for err in e.errors())
+
+
+def clean(long: pl.DataFrame) -> pl.DataFrame:
+    """Collapse whitespace (incl. stray \\r\\n), blank -> null, lowercase the coded fields,
+    and parse amounts ('$1,234.50', '60%') into numbers."""
+    text = [c for c in OUTPUT_COLUMNS if c != "cms_shoppable_id"]
+    df = long.with_columns(
+        pl.col(c).cast(pl.String).str.replace_all(r"\s+", " ").str.strip_chars()
+        .replace("", None).alias(c)
+        for c in text
+    ).with_columns(
+        pl.col("setting", "methodology", "billing_class").str.to_lowercase(),
+        pl.col("amount").str.replace_all(r"[$,%]", "").str.strip_chars().alias("amount"),
+    )  # fmt: skip
+    return df.with_columns(pl.col("amount").cast(pl.Float64, strict=False).alias("number"))
+
+
+def reject_reason() -> pl.Expr:
+    """PriceRow's rules as one expression: '' for a valid row, else the reasons."""
+    number, price_type = pl.col("number"), pl.col("price_type")
+    rules = [
+        (pl.col("description").is_null(), "description: missing"),
+        (~pl.col("setting").is_in(SETTINGS).fill_null(False),
+         "setting: not inpatient, outpatient or both"),
+        (pl.col("methodology").is_not_null() & ~pl.col("methodology").is_in(METHODOLOGIES),
+         "methodology: unknown value"),
+        (pl.col("amount").is_not_null() & (number.is_null() | ~number.is_finite()),
+         "amount: not a number"),
+        (number < 0, "negative amount"),
+        (price_type.str.starts_with("negotiated") & pl.col("payer_name").is_null(),
+         "negotiated price without a payer"),
+        ((price_type != "negotiated_algorithm") & pl.col("amount").is_null(), "missing amount"),
+        ((price_type == "negotiated_algorithm") & pl.col("algorithm").is_null(),
+         "algorithm price without algorithm text"),
+    ]  # fmt: skip
+    return pl.concat_str(
+        [pl.when(rule.fill_null(False)).then(pl.lit(message)) for rule, message in rules],
+        separator="; ",
+        ignore_nulls=True,
+    ).fill_null("")
+
+
 def validate(long: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
     """(valid rows, rejected rows with a reason)."""
-    valid, rejects = [], []
-    for row in long.iter_rows(named=True):
-        try:
-            valid.append(PriceRow(**row).model_dump())
-        except ValidationError as e:
-            reason = "; ".join(
-                f"{'.'.join(map(str, err['loc'])) or 'row'}: {err['msg']}" for err in e.errors()
-            )
-            rejects.append({**{k: None if v is None else str(v) for k, v in row.items()},
-                            "reason": reason})  # fmt: skip
-    schema = {**{c: pl.String for c in OUTPUT_COLUMNS}, "service_id": pl.Int64,
-              "amount": pl.Decimal(18, 4)}  # fmt: skip
-    valid_df = pl.DataFrame(valid, schema=schema) if valid else pl.DataFrame(schema=schema)
-    reject_schema = {**{c: pl.String for c in OUTPUT_COLUMNS}, "reason": pl.String}
-    rejects_df = pl.DataFrame(rejects, schema=reject_schema)
-    return valid_df, rejects_df
+    checked = clean(long).with_columns(reject_reason().alias("reason"))
+    valid = checked.filter(pl.col("reason") == "").with_columns(
+        pl.col("number").round(4).cast(pl.Decimal(18, 4)).alias("amount")
+    )
+    rejects = checked.filter(pl.col("reason") != "")
+    return valid.select(OUTPUT_COLUMNS), rejects.select(*OUTPUT_COLUMNS, "reason")
 
 
 # ---------- entry points ----------
 
 
 def load_shoppable(path: Path = SHOPPABLE_PATH) -> pl.DataFrame:
-    return pl.read_csv(path, schema_overrides={"code": pl.String}).select(
-        "code", "code_type", "service_id"
+    return (
+        pl.read_csv(path, schema_overrides={"code": pl.String})
+        .select("code", "code_type", pl.col("service_id").alias("cms_shoppable_id"))
+        .unique(["code", "code_type"])
     )
 
 
@@ -422,11 +483,11 @@ def main() -> None:
         )
         valid.write_parquet(PARSED_DIR / f"{ccn}.parquet")
         rejects.write_csv(PARSED_DIR / f"{ccn}_rejects.csv")
-        services = valid["service_id"].n_unique() if valid.height else 0
-        print(f"{ccn}  {meta['shape']:5} items={meta['items']:>9,}  services={services:>2}/70  "
-              f"prices={meta['valid']:>6,}  duplicates={meta['duplicates']:>5,}  "
-              f"rejected={meta['rejected']:>4,}  "
-              f"updated={meta['last_updated_on']}")  # fmt: skip
+        codes = valid["code"].n_unique()
+        cms = valid["cms_shoppable_id"].drop_nulls().n_unique()
+        print(f"{ccn}  {meta['shape']:5} items={meta['items']:>9,}  codes={codes:>6,}  "
+              f"cms70={cms:>2}  prices={meta['valid']:>9,}  dups={meta['duplicates']:>7,}  "
+              f"rejected={meta['rejected']:>5,}  updated={meta['last_updated_on']}")  # fmt: skip
 
 
 if __name__ == "__main__":
