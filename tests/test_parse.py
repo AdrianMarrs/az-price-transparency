@@ -168,7 +168,10 @@ def test_bulk_validation_gives_the_same_verdict_as_pydantic(changes, message):
 FIXTURE_FILES = sorted(FIXTURES.glob("*.*"))
 SHAPES = {"030006": "tall", "030010": "json", "030011": "json", "030064": "tall",
           "030085": "wide", "030111": "tall", "030114": "wide", "030148": "wide",
-          "034022": "wide", "034030": "tall", "034033": "wide"}  # fmt: skip
+          "034022": "wide", "034030": "tall", "034033": "wide",
+          # statewide: CommonSpirit JSON, Havasu (zip), Kingman (needs the csv fallback at
+          # full size), Phoenix Children's (no file extension in its URL)
+          "030036": "json", "030069": "tall", "030055": "tall", "033302": "tall"}  # fmt: skip
 
 
 @pytest.fixture(scope="module", params=FIXTURE_FILES, ids=lambda p: p.stem)

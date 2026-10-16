@@ -53,10 +53,11 @@ All 11 claim CMS template version 3.0.0. Counts from `scripts/profile_raw_files.
 1. **St. Joseph's and St. Mary's publish no payer-specific negotiated charges** and no de-identified minimum or maximum, only gross and discounted cash prices. Both are required by 45 CFR 180.50(b).
 2. **Carondelet blocks automated access to its `cms-hpt.txt`** with a Cloudflare bot challenge, though CMS intends the file for automated discovery. It was copied by hand from a browser (`ingest/hospitals/manual_cms_hpt/`); the block is still recorded as `found_manual_copy`.
 3. **Banner serves `cms-hpt.txt` only to browser user agents**; its price files download normally. Recorded as `found_browser_ua_only`.
-4. **Dates not in the template's `YYYY-MM-DD` format:** Sonora (`12/31/2025`), El Dorado Springs (`7/31/2026`); the three Northwest Healthcare files pad the date with leading spaces.
-5. **El Dorado Springs lists only 23 items**, and 43% of its payer prices have no dollar amount.
-6. **Sonora's file is mostly drugs:** 7,964 of 8,792 rows carry only an NDC code, and only 1,726 payer prices exist across its 130 payer-plans.
-7. **Sahuarita's file has a plan with no payer name** ("NODE Devoted Health MCR ADV" under a blank payer in its header), so 3,057 of its prices can't be attributed and are rejected.
+4. **El Dorado Springs lists only 23 items**, and 43% of its payer prices have no dollar amount.
+5. **Sonora's file is mostly drugs:** 7,964 of 8,792 rows carry only an NDC code, and only 1,726 payer prices exist across its 130 payer-plans.
+6. **Sahuarita's file has a plan with no payer name** ("NODE Devoted Health MCR ADV" under a blank payer in its header), so 3,057 of its prices can't be attributed and are rejected.
+
+**Corrected:** an earlier version listed Sonora's `12/31/2025` and El Dorado's `7/31/2026` dates as non-compliant. CMS's data dictionary requires ISO 8601 but [also accepts M/D/YYYY and MM/DD/YYYY](https://github.com/CMSgov/hospital-price-transparency/blob/master/documentation/CSV/README.md#additional-notes-for-mrf-date) in CSV files, and CMS's validator passes both files. The parser still has to handle all three formats.
 
 ## Problems hit and how the parser handles each
 
