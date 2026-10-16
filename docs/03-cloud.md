@@ -76,3 +76,28 @@ terraform apply main.tfplan
 ```
 
 CI checks formatting and validates both stacks on every push, without AWS credentials.
+
+Teardown was tested early, on the data bucket: apply, destroy (bucket confirmed gone), apply, then a plan showing no drift.
+
+## Data bucket
+
+`az-price-transparency-data-<account id>` (`infra/main/data_bucket.tf`): public access blocked, S3-managed encryption, HTTPS only. Its contents can all be rebuilt, so it has no versioning and `force_destroy` lets `terraform destroy` remove it.
+
+| Prefix | What | Kept |
+| --- | --- | --- |
+| `raw/<yyyy-mm-dd>/` | Price files as downloaded, gzip-compressed | 7 days (lifecycle rule); the hospitals' sites are the long-term copy |
+| `parquet/` | Parsed prices, one file per hospital | Until replaced |
+
+The pipeline writes to local disk as before (the parser and loader read it) and, when `DATA_BUCKET` is set, copies each new raw file and each Parquet file to the bucket (`ingest/storage.py`). The raw file's S3 location is recorded in `raw.source_files.s3_uri`. A failed upload is reported but never fails the download or parse. Without `DATA_BUCKET`, as in tests and CI, nothing is uploaded.
+
+```
+$env:AWS_PROFILE = "az-price"
+$env:DATA_BUCKET = "az-price-transparency-data-<account id>"   # terraform -chdir=infra/main output data_bucket
+uv run dagster dev -m orchestration.definitions
+```
+
+`aws login` credentials need botocore's CRT extension, so the dependency is `boto3[crt]`.
+
+## Blocked: GitHub Actions to AWS (OIDC)
+
+The deploy role is written (local branch `oidc-blocked`: `infra/bootstrap/github_oidc.tf` and `.github/workflows/deploy.yml`) but can't be applied: a service control policy in the AWS Organization this account belongs to denies every IAM OpenID Connect provider action, even listing them. It has to be changed from the organization's management account. Until then, Terraform is applied from a laptop.

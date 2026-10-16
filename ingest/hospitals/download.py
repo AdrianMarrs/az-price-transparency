@@ -37,6 +37,7 @@ import polars as pl
 import psycopg
 
 from ingest.hospitals.find_sources import BROWSER_USER_AGENT, USER_AGENT
+from ingest.storage import upload
 
 SOURCES_PATH = Path("warehouse/seeds/hospital_sources.csv")
 RAW_DIR = Path("data/raw")
@@ -65,8 +66,10 @@ CREATE TABLE IF NOT EXISTS raw.source_files (
     path          text,
     etag          text,
     last_modified text,
-    error         text
+    error         text,
+    s3_uri        text                   -- the copy in the data bucket, if uploaded
 );
+ALTER TABLE raw.source_files ADD COLUMN IF NOT EXISTS s3_uri text;
 """
 
 
@@ -193,7 +196,7 @@ def last_download(conn: psycopg.Connection, ccn: str, url: str) -> LastDownload 
 
 def record(conn: psycopg.Connection, row: dict, attempted_at: datetime) -> None:
     columns = ["ccn", "url", "outcome", "access", "http_status", "format", "sha256",
-               "size_bytes", "path", "etag", "last_modified", "error"]  # fmt: skip
+               "size_bytes", "path", "etag", "last_modified", "error", "s3_uri"]  # fmt: skip
     conn.execute(
         f"INSERT INTO raw.source_files (attempted_at, {', '.join(columns)}) "
         f"VALUES (%s, {', '.join(['%s'] * len(columns))})",
@@ -239,6 +242,8 @@ def import_manual(ccn: str, src: Path) -> dict:
             if Path(row["path"]) != Path(last.path):
                 Path(row["path"]).unlink()  # same bytes as last time: keep the earlier copy
             row |= {"outcome": "unchanged", "path": last.path}
+        else:
+            row["s3_uri"] = upload(Path(row["path"]))
         record(conn, row, started)
     print(f"{ccn}  {row['outcome']} {row['size_bytes'] / 1e6:,.0f} MB  {row['path']}")
     return row
@@ -324,6 +329,8 @@ def download_hospitals(ccns: list[str] | None = None) -> list[dict]:
             started = datetime.now(UTC)
             last = last_download(conn, s["ccn"], s["mrf_url"])
             row = download(client, s["ccn"], s["mrf_url"], day_dir, last)
+            if row["outcome"] == "downloaded":
+                row["s3_uri"] = upload(Path(row["path"]))
             record(conn, row, started)
             seconds = (datetime.now(UTC) - started).total_seconds()
             size = f"{row['size_bytes'] / 1e6:,.0f} MB" if row.get("size_bytes") else ""

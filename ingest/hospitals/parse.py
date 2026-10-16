@@ -37,6 +37,8 @@ from typing import Literal
 import polars as pl
 from pydantic import BaseModel, ValidationError, field_validator, model_validator
 
+from ingest.storage import upload
+
 RAW_DIR = Path("data/raw")
 PARSED_DIR = Path("data/parsed")
 # Files are read whole into memory. Larger ones are recorded as deferred until there is a
@@ -628,6 +630,7 @@ def parse_one(ccn: str, path: Path, shoppable: pl.DataFrame) -> dict:
     valid.with_columns(
         pl.lit(ccn).alias("ccn"), pl.lit(path.as_posix()).alias("source_path")
     ).write_parquet(PARSED_DIR / f"{ccn}.parquet")
+    upload(PARSED_DIR / f"{ccn}.parquet")
     rejects.write_csv(PARSED_DIR / f"{ccn}_rejects.csv")
     top_reason = rejects["reason"].mode().first() if rejects.height else None
     kinds = valid.select(
