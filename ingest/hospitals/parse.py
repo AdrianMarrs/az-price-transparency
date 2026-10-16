@@ -549,9 +549,12 @@ def parse_file(path: Path, shoppable: pl.DataFrame) -> tuple[dict, pl.DataFrame,
     # to identical rows once that number is dropped; keep one.
     unique = long.unique(maintain_order=True)
     valid, rejects = validate(unique)
+    # Cleaning can make more rows identical ("536.13" vs "536.130", extra spaces), which
+    # dbt's unique price_id test caught statewide; drop those too.
+    valid = valid.unique(maintain_order=True)
     meta |= {
         "price_rows": long.height,
-        "duplicates": long.height - unique.height,
+        "duplicates": long.height - valid.height - rejects.height,
         "valid": valid.height,
         "rejected": rejects.height,
     }

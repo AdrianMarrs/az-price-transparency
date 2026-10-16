@@ -1,3 +1,4 @@
+import csv
 import gzip
 import io
 import zipfile
@@ -298,6 +299,25 @@ def test_python_csv_fallback_reads_the_same_as_polars(ccn):
     slow = read_csv_with_python(path)
     assert slow.height == fast.height
     assert slow.select(fast.columns[:20]).equals(fast.select(fast.columns[:20]))
+
+
+def test_rows_that_only_match_after_cleaning_are_deduplicated(tmp_path):
+    # Valley View's file lists the same price as "536.13" and "536.130".
+    header = ["description", "code|1", "code|1|type", "setting", "standard_charge|min"]
+    rows = [
+        ["hospital_name", "last_updated_on", "version"],
+        ["Test Hospital", "2026-01-01", "3.0.0"],
+        header,
+        ["3D radiotherapy plan", "77295", "CPT", "outpatient", "536.13"],
+        ["3D radiotherapy plan ", "77295", "CPT", "outpatient", "536.130"],
+    ]
+    buffer = io.StringIO()
+    csv.writer(buffer, lineterminator="\n").writerows(rows)
+    path = tmp_path / "999999_twins.csv"
+    path.write_text(buffer.getvalue(), encoding="utf-8")
+    meta, valid, _ = parse_file(path, SHOPPABLE)
+    assert valid.height == 1
+    assert meta["duplicates"] == 1
 
 
 def test_carondelet_has_no_insurer_prices():
