@@ -76,6 +76,16 @@ All 11 files parse in about 13 seconds; the output is 6 MB of Parquet.
 - **Reloads needed two fixes.** Without an index on `ccn`, each hospital's `DELETE` scanned the whole partition (47 s for one hospital). And at the default `max_wal_size` of 1GB, a full reload triggered back-to-back checkpoints of 45-58 s each; local Postgres now runs with 4GB. Deleted rows also stay on disk until vacuumed (the table reached 1.5 GB after two reloads).
 - **Still open:** occasional 10-25 s stalls on Docker Desktop for Windows, waiting on WAL writes, while raw disk throughput measures 3.4-4.2 GB/s. To compare against RDS in Phase 3.
 
+## Answering the question: a knee MRI (2026-10-16)
+
+`warehouse/analyses/knee_mri.sql` answers "what does a knee MRI without contrast (CPT 73721) cost at each Pima County hospital, by insurer?" for the outpatient facility charge. It returns 169 insurer-plan prices across 6 hospitals and 18 insurer groups; St. Joseph's and St. Mary's publish no insurer prices, and the psychiatric hospitals don't do MRIs.
+
+- **Cash can beat insurance.** Banner's cash price is $586 (South) to $686 (Tucson), while Cigna's negotiated rate there is $1,328 and BCBS AZ commercial is $950.
+- **One system, one contract.** The three Northwest Healthcare hospitals have identical insurer rates but different cash prices ($1,745 at Sahuarita, $2,327 at the other two).
+- **One knee or both.** Northwest lists both knees (`MR-LW JOINT WO BI`) at exactly twice one knee; TMC charges insurers $358.31 either way. The query keeps the range rather than picking one line.
+- **Checked by hand** against the raw files, without the parser: TMC Cigna $358.31 and cash $1,451.24; Oro Valley BCBS PimaConnect $601.01 / $1,202.01 and cash $2,327.28; Banner South Cigna $1,328.00 and cash $585.55. All match.
+- **Gap found: market must come from payer and plan.** The payer seed assigns a market per payer name, but plan names carry it too: "BCBS AZ Work Comp" is counted as commercial, and payers mapped `mixed` have plans named "Medicaid", "Medicare Advantage" and "ACA Health Plan". Next: a plan-level override in the payer seed.
+
 ## Quirks the parser must handle (each becomes a test case)
 
 - **Column order differs** between files (Banner puts `modifiers` after `plan_name`; El Dorado puts `standard_charge|min`/`max` at the end). Read columns by name, never by position.
