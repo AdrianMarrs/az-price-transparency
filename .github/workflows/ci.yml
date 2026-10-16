@@ -23,6 +23,8 @@ jobs:
       - run: uv sync --locked
       - run: uv run ruff check .
       - run: uv run ruff format --check .
+      - name: dbt parse (the Dagster tests read dbt's manifest)
+        run: uv run dbt parse --project-dir warehouse --profiles-dir warehouse
       - run: uv run pytest -rs
       - name: dbt build on the test fixtures
         run: |

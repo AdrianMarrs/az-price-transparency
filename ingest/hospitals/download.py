@@ -186,16 +186,15 @@ def record(conn: psycopg.Connection, row: dict, attempted_at: datetime) -> None:
     )
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--ccn", nargs="*", help="only these hospitals")
-    args = parser.parse_args()
-
+def download_hospitals(ccns: list[str] | None = None) -> list[dict]:
+    """Download (or confirm unchanged) each hospital's price file; returns the rows recorded.
+    Hospitals with no price file URL are skipped. Used by main() and by Dagster."""
     sources = pl.read_csv(SOURCES_PATH, infer_schema_length=0).filter(pl.col("mrf_url") != "")
-    if args.ccn:
-        sources = sources.filter(pl.col("ccn").is_in(args.ccn))
+    if ccns:
+        sources = sources.filter(pl.col("ccn").is_in(ccns))
     day_dir = RAW_DIR / datetime.now(UTC).strftime("%Y-%m-%d")
 
+    rows = []
     timeout = httpx.Timeout(60, read=300)
     headers = {"User-Agent": USER_AGENT}
     with (
@@ -212,6 +211,14 @@ def main() -> None:
             size = f"{row['size_bytes'] / 1e6:,.0f} MB" if row.get("size_bytes") else ""
             detail = row.get("error") or row.get("path", "")
             print(f"{s['ccn']}  {row['outcome']:10} {size:>8} {seconds:6.0f}s  {detail}")
+            rows.append(row | {"seconds": seconds})
+    return rows
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--ccn", nargs="*", help="only these hospitals")
+    download_hospitals(parser.parse_args().ccn)
 
 
 if __name__ == "__main__":

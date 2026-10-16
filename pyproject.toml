@@ -3,6 +3,9 @@ name = "az-price-transparency"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+    "dagster>=1.13.26",
+    "dagster-dbt>=0.29.26",
+    "dagster-webserver>=1.13.26",
     "duckdb>=1.5.6",
     "httpx>=0.28.1",
     "polars>=2.0.0",

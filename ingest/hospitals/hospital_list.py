@@ -71,21 +71,26 @@ def build_hospital_list(raw: pl.DataFrame, state: str, county: str | None) -> pl
     ).sort("city", "name")
 
 
+def refresh_hospital_list(state: str = "AZ", county: str | None = None) -> tuple[pl.DataFrame, str]:
+    """Download the current CMS file and rewrite the hospitals seed; returns (seed, modified)."""
+    with httpx.Client(timeout=60, follow_redirects=True) as client:
+        url, modified = current_download_url(client)
+        download(client, url, RAW_PATH)
+
+    raw = pl.read_csv(RAW_PATH, infer_schema_length=0)
+    hospitals = build_hospital_list(raw, state, county)
+    SEED_PATH.parent.mkdir(parents=True, exist_ok=True)
+    hospitals.write_csv(SEED_PATH)
+    return hospitals, modified
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--state", default="AZ")
     parser.add_argument("--county", help="optional, e.g. PIMA")
     args = parser.parse_args()
 
-    with httpx.Client(timeout=60, follow_redirects=True) as client:
-        url, modified = current_download_url(client)
-        download(client, url, RAW_PATH)
-
-    raw = pl.read_csv(RAW_PATH, infer_schema_length=0)
-    hospitals = build_hospital_list(raw, args.state, args.county)
-    SEED_PATH.parent.mkdir(parents=True, exist_ok=True)
-    hospitals.write_csv(SEED_PATH)
-
+    hospitals, modified = refresh_hospital_list(args.state, args.county)
     federal = hospitals.filter(pl.col("federally_run")).height
     print(f"CMS file modified {modified}; {hospitals.height} hospitals written to {SEED_PATH}")
     print(f"{federal} federally run (flagged), {hospitals.height - federal} in scope")

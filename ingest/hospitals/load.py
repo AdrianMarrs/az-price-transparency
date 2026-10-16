@@ -146,6 +146,25 @@ def source_file_id(conn: psycopg.Connection, path: str) -> int | None:
     return row[0] if row else None
 
 
+def load_parsed(conn: psycopg.Connection, ccn: str, state: str) -> pl.DataFrame:
+    """Load data/parsed/<ccn>.parquet into the warehouse; returns the rows loaded (an empty
+    file still replaces the hospital's old rows, so stale prices don't linger)."""
+    df = pl.read_parquet(PARSED_DIR / f"{ccn}.parquet")
+    source_id = source_file_id(conn, df["source_path"][0]) if df.height else None
+    df = df.with_columns(
+        pl.lit(state).alias("state"), pl.lit(source_id, pl.Int64).alias("source_file_id")
+    )
+    delete_s, copy_s = load_hospital(conn, df, ccn, state)
+    rate = f"{df.height / copy_s:>9,.0f} rows/s" if df.height else ""
+    print(f"{ccn}  {df.height:>9,} rows  delete {delete_s:5.2f}s  copy {copy_s:5.2f}s  {rate}")
+    return df
+
+
+def state_of(ccn: str) -> str:
+    states = pl.read_csv(HOSPITALS_PATH, infer_schema_length=0).select("ccn", "state")
+    return dict(states.rows())[ccn]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--ccn", nargs="*", help="only these hospitals")
@@ -157,34 +176,17 @@ def main() -> None:
     if args.ccn:
         paths = [p for p in paths if p.stem in args.ccn]
 
-    total_rows, total_delete, total_copy = 0, 0.0, 0.0
+    total_rows = 0
     with psycopg.connect(DATABASE_URL, autocommit=True) as conn:
         create_table(conn)
         biggest = None
         for path in paths:
-            ccn = path.stem
-            df = pl.read_parquet(path)
-            if df.is_empty():
-                print(f"{ccn}  no rows")
-                continue
-            state = states[ccn]
-            df = df.with_columns(
-                pl.lit(state).alias("state"),
-                pl.lit(source_file_id(conn, df["source_path"][0]), pl.Int64).alias(
-                    "source_file_id"
-                ),
-            )
-            delete_s, copy_s = load_hospital(conn, df, ccn, state)
+            df = load_parsed(conn, path.stem, states[path.stem])
             total_rows += df.height
-            total_delete += delete_s
-            total_copy += copy_s
-            print(f"{ccn}  {df.height:>9,} rows  delete {delete_s:5.2f}s  copy {copy_s:5.2f}s  "
-                  f"{df.height / copy_s:>9,.0f} rows/s")  # fmt: skip
             if biggest is None or df.height > biggest.height:
                 biggest = df
         conn.execute("ANALYZE raw.hospital_charges")
-        print(f"total {total_rows:,} rows: delete {total_delete:.1f}s, copy {total_copy:.1f}s "
-              f"({total_rows / total_copy:,.0f} rows/s)")  # fmt: skip
+        print(f"total {total_rows:,} rows")
         if args.compare and biggest is not None:
             rates = compare_load_methods(conn, biggest)
             for method, rate in rates.items():

@@ -583,16 +583,22 @@ def main() -> None:
               f"items={entry.get('items') or 0:>9,}  prices={entry.get('valid') or 0:>9,}  "
               f"rejected={entry.get('rejected') or 0:>6,}  {entry.get('error') or ''}")  # fmt: skip
 
-    # Merge with earlier runs so a --ccn run doesn't drop other hospitals' outcomes.
+    print(update_report(report)["outcome"].value_counts(sort=True))
+
+
+def update_report(entries: list[dict]) -> pl.DataFrame:
+    """Write these entries into data/parsed/parse_report.csv, replacing the same hospitals'
+    earlier rows and keeping everyone else's (a --ccn run doesn't drop other outcomes)."""
     report_path = PARSED_DIR / "parse_report.csv"
-    new = pl.DataFrame(report, infer_schema_length=None).cast(pl.String)
+    new = pl.DataFrame(entries, infer_schema_length=None).cast(pl.String)
     if report_path.exists():
         old = pl.read_csv(report_path, infer_schema_length=0)
         new = pl.concat(
             [old.filter(~pl.col("ccn").is_in(new["ccn"].to_list())), new], how="diagonal"
         )
-    new.sort("ccn").write_csv(report_path)
-    print(new["outcome"].value_counts(sort=True))
+    new = new.sort("ccn")
+    new.write_csv(report_path)
+    return new
 
 
 def outcome(meta: dict) -> str:
