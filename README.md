@@ -23,7 +23,7 @@ $env:DAGSTER_HOME = "$PWD\.dagster_home"               # PowerShell
 uv run dagster dev -m orchestration.definitions        # pipeline UI at localhost:3000
 ```
 
-Design notes, one per phase: [setup](docs/00-setup.md), [hospital files](docs/01-hospitals.md), [every Arizona hospital](docs/02-arizona.md).
+Design notes, one per phase: [setup](docs/00-setup.md), [hospital files](docs/01-hospitals.md), [every Arizona hospital](docs/02-arizona.md), [cloud](docs/03-cloud.md).
 
 ## What it does
 
