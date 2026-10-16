@@ -231,3 +231,10 @@ warehouse/.user.yml
 # Dagster run storage (set DAGSTER_HOME to this folder)
 .dagster_home/
 .tmp_dagster_home_*/
+
+# Terraform: providers and local state (remote state lives in S3; the lock file is committed)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
