@@ -142,7 +142,7 @@ weren't tested; those hospitals already fail the earlier rules.
 """
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out = OUT_DIR / f"arizona-compliance-{checked_on:%Y-%m-%d}.md"
-    out.write_text(report, encoding="utf-8")
+    out.write_text(report, encoding="utf-8", newline="\n")
     print(f"{out}: {n} hospitals, {perfect} perfect, {len(usable)} with usable insurer prices")
 
 
