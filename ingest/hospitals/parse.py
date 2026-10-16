@@ -1,0 +1,433 @@
+"""Parse a hospital price file into one long, validated table of shoppable-service prices.
+
+Usage:
+    uv run python -m ingest.hospitals.parse [--ccn 030006 ...]
+
+For each hospital, takes its newest file under data/raw/ and writes
+data/parsed/<ccn>.parquet (valid prices) and data/parsed/<ccn>_rejects.csv (rows that
+failed validation, with the reason). Handles the three CMS template shapes:
+
+- CSV tall: one row per item x payer x plan (payer_name, plan_name columns)
+- CSV wide: one row per item, a column group per payer and plan
+- JSON: items with code_information and standard_charges[].payers_information[]
+
+Only items carrying one of the CMS-specified shoppable service codes are kept; the
+columns that change a price (setting, billing class, modifiers, payer, plan,
+methodology) are never dropped. See docs/01-hospitals.md for the quirks handled here.
+"""
+
+import argparse
+import csv
+import gzip
+import io
+import json
+import re
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
+from pathlib import Path
+from typing import Literal
+
+import polars as pl
+from pydantic import BaseModel, ValidationError, field_validator, model_validator
+
+RAW_DIR = Path("data/raw")
+PARSED_DIR = Path("data/parsed")
+SHOPPABLE_PATH = Path("warehouse/seeds/shoppable_services.csv")
+
+# CSV column (after header normalization) -> our column name
+ITEM_COLUMNS = {
+    "description": "description",
+    "setting": "setting",
+    "billing_class": "billing_class",
+    "modifiers": "modifiers",
+    "standard_charge|gross": "gross",
+    "standard_charge|discounted_cash": "discounted_cash",
+    "standard_charge|min": "min",
+    "standard_charge|max": "max",
+}
+PAYER_FIELDS = {
+    "negotiated_dollar": "negotiated_dollar",
+    "negotiated_percentage": "negotiated_percentage",
+    "negotiated_algorithm": "negotiated_algorithm",
+    "methodology": "methodology",
+}
+ITEM_PRICES = ["gross", "discounted_cash", "min", "max"]
+PAYER_PRICES = ["negotiated_dollar", "negotiated_percentage"]
+KEYS = ["description", "code", "code_type", "service_id", "setting", "billing_class", "modifiers"]
+OUTPUT_COLUMNS = [*KEYS, "payer_name", "plan_name", "methodology", "price_type", "amount",
+                  "algorithm"]  # fmt: skip
+
+PriceType = Literal[
+    "gross", "discounted_cash", "min", "max",
+    "negotiated_dollar", "negotiated_percentage", "negotiated_algorithm",
+]  # fmt: skip
+Methodology = Literal[
+    "case rate", "fee schedule", "percent of total billed charges", "per diem", "other"
+]
+
+
+# ---------- headers and metadata ----------
+
+
+def normalize_header(header: str) -> str:
+    """'standard_charge|[payer_AETNA ]|[plan_ HMO/PPO]|negotiated_dollar ' ->
+    'standard_charge|AETNA|HMO/PPO|negotiated_dollar'. Field names are lowercased;
+    payer and plan names keep their case."""
+    parts = [p.strip() for p in header.replace("﻿", "").split("|")]
+    parts = [re.sub(r"^\[(payer|plan)_\s*|\s*\]$", "", p).strip() for p in parts]
+    parts[0] = parts[0].lower()
+    if parts[0] in {"standard_charge", "code"} or len(parts) <= 2:
+        parts[-1] = parts[-1].lower()
+    return "|".join(parts)
+
+
+def parse_date(value: str | None) -> date | None:
+    """'2026-04-01', '    2026-04-01', '7/31/2026' and '12/31/2025' all parse."""
+    if not value:
+        return None
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(value.strip(), fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def open_text(path: Path) -> io.TextIOBase:
+    """Open a raw (.gz) or plain file as text; callers use it in a with-block."""
+    if path.suffix == ".gz":
+        return gzip.open(path, "rt", encoding="utf-8-sig", newline="")
+    return path.open(encoding="utf-8-sig", newline="")
+
+
+def read_csv_metadata(path: Path) -> dict:
+    """Rows 1-2 of a CMS CSV: header names, then values. Extra fields are tolerated."""
+    with open_text(path) as f:
+        reader = csv.reader(f)
+        keys, values = next(reader), next(reader)
+    meta = {normalize_header(k): v.strip() for k, v in zip(keys, values) if k.strip()}
+    return {
+        "hospital_name": meta.get("hospital_name"),
+        "last_updated_on": parse_date(meta.get("last_updated_on")),
+        "version": meta.get("version"),
+    }
+
+
+# ---------- reading each shape into an item table ----------
+
+
+def read_csv_items(path: Path) -> pl.DataFrame:
+    df = pl.read_csv(path, skip_rows=2, infer_schema_length=0, truncate_ragged_lines=True)
+    names, seen = [], set()
+    for column in df.columns:
+        name = normalize_header(column)
+        while name in seen:  # rare duplicates after normalization
+            name += "_dup"
+        seen.add(name)
+        names.append(name)
+    df.columns = names
+    return df.select([c for c in df.columns if c and not c.startswith("_duplicated")])
+
+
+def json_items(doc: dict) -> pl.DataFrame:
+    """Flatten JSON into the tall CSV layout (one row per item x payer x plan)."""
+    rows = []
+    for item in doc.get("standard_charge_information", []):
+        codes = {}
+        for i, c in enumerate(item.get("code_information", []), 1):
+            codes[f"code|{i}"], codes[f"code|{i}|type"] = str(c.get("code", "")), c.get("type")
+        for sc in item.get("standard_charges", []):
+            base = {
+                **codes,
+                "description": item.get("description"),
+                "setting": sc.get("setting"),
+                "billing_class": sc.get("billing_class"),
+                "modifiers": "|".join(sc.get("modifier_code") or []) or None,
+                "standard_charge|gross": sc.get("gross_charge"),
+                "standard_charge|discounted_cash": sc.get("discounted_cash"),
+                "standard_charge|min": sc.get("minimum"),
+                "standard_charge|max": sc.get("maximum"),
+            }
+            payers = sc.get("payers_information") or [{}]
+            for p in payers:
+                rows.append({
+                    **base,
+                    "payer_name": p.get("payer_name"),
+                    "plan_name": p.get("plan_name"),
+                    "standard_charge|negotiated_dollar": p.get("standard_charge_dollar"),
+                    "standard_charge|negotiated_percentage": p.get("standard_charge_percentage"),
+                    "standard_charge|negotiated_algorithm": p.get("standard_charge_algorithm"),
+                    "standard_charge|methodology": p.get("methodology"),
+                })  # fmt: skip
+    df = pl.DataFrame(rows, infer_schema_length=None)
+    return df.select(pl.all().cast(pl.String))
+
+
+def read_json(path: Path) -> tuple[dict, pl.DataFrame]:
+    with open_text(path) as f:
+        doc = json.load(f)
+    meta = {
+        "hospital_name": doc.get("hospital_name"),
+        "last_updated_on": parse_date(doc.get("last_updated_on")),
+        "version": doc.get("version"),
+    }
+    return meta, json_items(doc)
+
+
+# ---------- shoppable matching ----------
+
+
+CODE_FAMILIES = {"CPT": "CPT/HCPCS", "HCPCS": "CPT/HCPCS", "MSDRG": "MS-DRG"}
+
+
+def code_family(column: str) -> pl.Expr:
+    """'CPT', 'hcpcs', 'MS-DRG', 'MS DRG' -> 'CPT/HCPCS' or 'MS-DRG'; anything else null."""
+    return (
+        pl.col(column)
+        .str.to_uppercase()
+        .str.replace_all(r"[\s-]", "")
+        .replace_strict(CODE_FAMILIES, default=None, return_dtype=pl.String)
+    )
+
+
+def match_shoppable(items: pl.DataFrame, shoppable: pl.DataFrame) -> pl.DataFrame:
+    """row_idx -> (code, code_type, service_id) for items carrying a shoppable code."""
+    numbers = sorted(
+        {int(m.group(1)) for c in items.columns if (m := re.match(r"code\|(\d+)$", c))}
+    )
+    if not numbers:
+        return pl.DataFrame(schema={"row_idx": pl.UInt32, "code": pl.String,
+                                    "code_type": pl.String, "service_id": pl.Int64})  # fmt: skip
+    codes = pl.concat(
+        [
+            items.select(
+                "row_idx",
+                pl.col(f"code|{n}").str.strip_chars().alias("code"),
+                code_family(f"code|{n}|type").alias("code_type")
+                if f"code|{n}|type" in items.columns
+                else pl.lit(None, pl.String).alias("code_type"),
+            )
+            for n in numbers
+        ]
+    ).filter(pl.col("code_type").is_not_null() & pl.col("code").is_not_null())
+    codes = codes.with_columns(
+        pl.when(pl.col("code_type") == "MS-DRG")
+        .then(pl.col("code").str.zfill(3))
+        .otherwise(pl.col("code").str.to_uppercase())
+        .alias("code")
+    )
+    return codes.join(shoppable, on=["code", "code_type"]).unique(["row_idx", "code"])
+
+
+# ---------- to long price rows ----------
+
+
+def present(column: str) -> pl.Expr:
+    return pl.col(column).is_not_null() & (pl.col(column).str.strip_chars() != "")
+
+
+def ensure(df: pl.DataFrame, columns: list[str]) -> pl.DataFrame:
+    missing = [pl.lit(None, pl.String).alias(c) for c in columns if c not in df.columns]
+    return df.with_columns(missing) if missing else df
+
+
+def payer_rows_wide(matched: pl.DataFrame) -> pl.DataFrame:
+    """One row per item x payer x plan from the wide layout's column groups."""
+    groups: dict[tuple[str, str], dict[str, str]] = {}
+    for column in matched.columns:
+        parts = column.split("|")
+        if len(parts) == 4 and parts[0] == "standard_charge" and parts[3] in PAYER_FIELDS:
+            groups.setdefault((parts[1], parts[2]), {})[PAYER_FIELDS[parts[3]]] = column
+    frames = []
+    for (payer, plan), columns in groups.items():
+        frame = matched.select(
+            *KEYS,
+            pl.lit(payer).alias("payer_name"),
+            pl.lit(plan).alias("plan_name"),
+            *[pl.col(src).alias(dst) for dst, src in columns.items()],
+        )
+        frames.append(ensure(frame, list(PAYER_FIELDS.values())))
+    if not frames:
+        return ensure(matched.select(KEYS).clear(), ["payer_name", "plan_name",
+                                                     *PAYER_FIELDS.values()])  # fmt: skip
+    return pl.concat(frames, how="diagonal")
+
+
+def to_long(items: pl.DataFrame, shoppable: pl.DataFrame) -> pl.DataFrame:
+    items = ensure(items.with_row_index("row_idx"), list(ITEM_COLUMNS))
+    matched = items.join(match_shoppable(items, shoppable), on="row_idx")
+    matched = matched.rename({src: dst for src, dst in ITEM_COLUMNS.items()})
+
+    item_prices = (
+        matched.select(*KEYS, *ITEM_PRICES)
+        .unpivot(index=KEYS, on=ITEM_PRICES, variable_name="price_type", value_name="amount")
+        .filter(present("amount"))
+        .unique()
+    )
+
+    if "payer_name" in matched.columns:  # tall CSV or JSON
+        payers = matched.select(
+            *KEYS, "payer_name", "plan_name",
+            *[pl.col(f"standard_charge|{f}").alias(f) if f"standard_charge|{f}" in matched.columns
+              else pl.lit(None, pl.String).alias(f) for f in PAYER_FIELDS],
+        ).filter(present("payer_name"))  # fmt: skip
+    else:
+        payers = payer_rows_wide(matched)
+
+    payer_prices = payers.unpivot(
+        index=[*KEYS, "payer_name", "plan_name", "methodology", "negotiated_algorithm"],
+        on=PAYER_PRICES, variable_name="price_type", value_name="amount",
+    ).filter(present("amount"))  # fmt: skip
+    algorithm_only = payers.filter(
+        ~present("negotiated_dollar") & ~present("negotiated_percentage")
+        & present("negotiated_algorithm")
+    ).select(
+        *KEYS, "payer_name", "plan_name", "methodology", "negotiated_algorithm",
+        pl.lit("negotiated_algorithm").alias("price_type"), pl.lit(None, pl.String).alias("amount"),
+    )  # fmt: skip
+
+    payer_long = pl.concat([payer_prices, algorithm_only], how="diagonal").rename(
+        {"negotiated_algorithm": "algorithm"}
+    )
+    return pl.concat([item_prices, payer_long], how="diagonal").select(OUTPUT_COLUMNS)
+
+
+# ---------- validation ----------
+
+
+class PriceRow(BaseModel):
+    description: str
+    code: str
+    code_type: Literal["CPT/HCPCS", "MS-DRG"]
+    service_id: int
+    setting: Literal["inpatient", "outpatient", "both"]
+    billing_class: str | None = None
+    modifiers: str | None = None
+    payer_name: str | None = None
+    plan_name: str | None = None
+    methodology: Methodology | None = None
+    price_type: PriceType
+    amount: Decimal | None = None
+    algorithm: str | None = None
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def blank_to_none(cls, v):
+        if isinstance(v, str):
+            v = " ".join(v.split())  # also removes stray \r\n
+            return v or None
+        return v
+
+    @field_validator("setting", "methodology", "billing_class", mode="before")
+    @classmethod
+    def lowercase(cls, v):
+        return v.lower() if isinstance(v, str) else v
+
+    @field_validator("amount", mode="before")
+    @classmethod
+    def clean_amount(cls, v):
+        if v is None:
+            return None
+        try:
+            return Decimal(str(v).replace("$", "").replace(",", "").replace("%", "").strip())
+        except InvalidOperation:
+            raise ValueError(f"not a number: {v!r}") from None
+
+    @model_validator(mode="after")
+    def check_rules(self):
+        if self.amount is not None and self.amount < 0:
+            raise ValueError("negative amount")
+        if self.price_type.startswith("negotiated") and not self.payer_name:
+            raise ValueError("negotiated price without a payer")
+        if self.price_type != "negotiated_algorithm" and self.amount is None:
+            raise ValueError("missing amount")
+        if self.price_type == "negotiated_algorithm" and not self.algorithm:
+            raise ValueError("algorithm price without algorithm text")
+        return self
+
+
+def validate(long: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """(valid rows, rejected rows with a reason)."""
+    valid, rejects = [], []
+    for row in long.iter_rows(named=True):
+        try:
+            valid.append(PriceRow(**row).model_dump())
+        except ValidationError as e:
+            reason = "; ".join(
+                f"{'.'.join(map(str, err['loc'])) or 'row'}: {err['msg']}" for err in e.errors()
+            )
+            rejects.append({**{k: None if v is None else str(v) for k, v in row.items()},
+                            "reason": reason})  # fmt: skip
+    schema = {**{c: pl.String for c in OUTPUT_COLUMNS}, "service_id": pl.Int64,
+              "amount": pl.Decimal(18, 4)}  # fmt: skip
+    valid_df = pl.DataFrame(valid, schema=schema) if valid else pl.DataFrame(schema=schema)
+    reject_schema = {**{c: pl.String for c in OUTPUT_COLUMNS}, "reason": pl.String}
+    rejects_df = pl.DataFrame(rejects, schema=reject_schema)
+    return valid_df, rejects_df
+
+
+# ---------- entry points ----------
+
+
+def load_shoppable(path: Path = SHOPPABLE_PATH) -> pl.DataFrame:
+    return pl.read_csv(path, schema_overrides={"code": pl.String}).select(
+        "code", "code_type", "service_id"
+    )
+
+
+def parse_file(path: Path, shoppable: pl.DataFrame) -> tuple[dict, pl.DataFrame, pl.DataFrame]:
+    """(metadata incl. counts, valid prices, rejects) for one raw file."""
+    if ".json" in path.name:
+        meta, items = read_json(path)
+    else:
+        meta, items = read_csv_metadata(path), read_csv_items(path)
+    meta["shape"] = "json" if ".json" in path.name else (
+        "tall" if "payer_name" in items.columns else "wide")  # fmt: skip
+    meta["items"] = items.height
+    long = to_long(items, shoppable)
+    # Chargemaster lines that differ only by the hospital's internal item number collapse
+    # to identical rows once that number is dropped; keep one.
+    unique = long.unique(maintain_order=True)
+    valid, rejects = validate(unique)
+    meta |= {
+        "price_rows": long.height,
+        "duplicates": long.height - unique.height,
+        "valid": valid.height,
+        "rejected": rejects.height,
+    }
+    return meta, valid, rejects
+
+
+def newest_file(ccn: str) -> Path | None:
+    files = sorted(RAW_DIR.glob(f"*/{ccn}_*.gz"), key=lambda p: p.parent.name)
+    return files[-1] if files else None
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--ccn", nargs="*", help="only these hospitals")
+    args = parser.parse_args()
+
+    shoppable = load_shoppable()
+    ccns = args.ccn or sorted({p.name.split("_")[0] for p in RAW_DIR.glob("*/*.gz")})
+    PARSED_DIR.mkdir(parents=True, exist_ok=True)
+    for ccn in ccns:
+        path = newest_file(ccn)
+        if path is None:
+            print(f"{ccn}  no raw file")
+            continue
+        meta, valid, rejects = parse_file(path, shoppable)
+        valid = valid.with_columns(
+            pl.lit(ccn).alias("ccn"), pl.lit(path.as_posix()).alias("source_path")
+        )
+        valid.write_parquet(PARSED_DIR / f"{ccn}.parquet")
+        rejects.write_csv(PARSED_DIR / f"{ccn}_rejects.csv")
+        services = valid["service_id"].n_unique() if valid.height else 0
+        print(f"{ccn}  {meta['shape']:5} items={meta['items']:>9,}  services={services:>2}/70  "
+              f"prices={meta['valid']:>6,}  duplicates={meta['duplicates']:>5,}  "
+              f"rejected={meta['rejected']:>4,}  "
+              f"updated={meta['last_updated_on']}")  # fmt: skip
+
+
+if __name__ == "__main__":
+    main()

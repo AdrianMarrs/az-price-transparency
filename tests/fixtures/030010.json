@@ -1,0 +1,1299 @@
+{
+ "hospital_name": "SMSJ Tucson Holdings LLC",
+ "last_updated_on": "2026-04-06",
+ "version": "3.0.0",
+ "pid": "1514688808",
+ "rid": "10754",
+ "location_name": [
+  "Carondelet St. Mary's Hospital"
+ ],
+ "hospital_address": [
+  "1601 W St Marys Rd, Tucson, AZ 85745"
+ ],
+ "type_2_npi": [
+  "1265818488"
+ ],
+ "license_information": {
+  "license_number": "H7303",
+  "state": "AZ"
+ },
+ "attestation": {
+  "attestation": "To the best of its knowledge and belief, this hospital has included all applicable standard charge information in accordance with the requirements of 45 CFR 180.50, and the information encoded is true, accurate, and complete as of the date in the file. This hospital has included all payer-specific negotiated charges in dollars that can be expressed as a dollar amount. For payer-specific negotiated charges that cannot be expressed as a dollar amount in the machine-readable file or not knowable in advance, the hospital attests that the payer-specific negotiated charge is based on a contractual algorithm, percentage or formula that precludes the provision of a dollar amount and has provided all necessary information available to the hospital for the public to be able to derive the dollar amount, including, but not limited to, the specific fee schedule or components referenced in such percentage, algorithm or formula.",
+  "confirm_attestation": true,
+  "attester_name": "Geoffrey Vines"
+ },
+ "standard_charge_information": [
+  {
+   "description": "BASIC METABOLIC PANEL",
+   "code_information": [
+    {
+     "code": "80048",
+     "type": "CPT"
+    },
+    {
+     "code": "4100166",
+     "type": "CDM"
+    },
+    {
+     "code": "300",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 664.0,
+     "discounted_cash": 498.0,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "BASIC METABOLIC PANEL",
+   "code_information": [
+    {
+     "code": "80048",
+     "type": "CPT"
+    },
+    {
+     "code": "4170166",
+     "type": "CDM"
+    },
+    {
+     "code": "300",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 1.0,
+     "discounted_cash": 0.75,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "CATH LT HRT W/LTVENT",
+   "code_information": [
+    {
+     "code": "93452",
+     "type": "CPT"
+    },
+    {
+     "code": "4613452",
+     "type": "CDM"
+    },
+    {
+     "code": "480",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 27727.0,
+     "discounted_cash": 20795.25,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "CBC AUTO W/O DIFF",
+   "code_information": [
+    {
+     "code": "85027",
+     "type": "CPT"
+    },
+    {
+     "code": "4120056",
+     "type": "CDM"
+    },
+    {
+     "code": "300",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 12.0,
+     "discounted_cash": 9.0,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "CBC AUTO W/O DIFF",
+   "code_information": [
+    {
+     "code": "85027",
+     "type": "CPT"
+    },
+    {
+     "code": "7255027",
+     "type": "CDM"
+    },
+    {
+     "code": "300",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 194.0,
+     "discounted_cash": 145.5,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "CBC WITH AUTO DIFF",
+   "code_information": [
+    {
+     "code": "85025",
+     "type": "CPT"
+    },
+    {
+     "code": "4155028",
+     "type": "CDM"
+    },
+    {
+     "code": "300",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 76.0,
+     "discounted_cash": 57.0,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "COMP METABOLIC PANEL",
+   "code_information": [
+    {
+     "code": "80053",
+     "type": "CPT"
+    },
+    {
+     "code": "4100111",
+     "type": "CDM"
+    },
+    {
+     "code": "300",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 1187.0,
+     "discounted_cash": 890.25,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "COMP METABOLIC PANEL",
+   "code_information": [
+    {
+     "code": "80053",
+     "type": "CPT"
+    },
+    {
+     "code": "4170111",
+     "type": "CDM"
+    },
+    {
+     "code": "300",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 1.0,
+     "discounted_cash": 0.75,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "CT PELVIS WITH CONTRAST",
+   "code_information": [
+    {
+     "code": "72193",
+     "type": "CPT"
+    },
+    {
+     "code": "5052193",
+     "type": "CDM"
+    },
+    {
+     "code": "350",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 8222.0,
+     "discounted_cash": 6166.5,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "DX MAMMO+CAD UNILAT",
+   "code_information": [
+    {
+     "code": "77065",
+     "type": "CPT"
+    },
+    {
+     "code": "4900206",
+     "type": "CDM"
+    },
+    {
+     "code": "401",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 1236.0,
+     "discounted_cash": 927.0,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "E&M-NEW PATIENT-LVL III",
+   "code_information": [
+    {
+     "code": "99203",
+     "type": "CPT"
+    },
+    {
+     "code": "6019203",
+     "type": "CDM"
+    },
+    {
+     "code": "510",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 859.0,
+     "discounted_cash": 644.25,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "E&M-NEW PATIENT-LVL III",
+   "code_information": [
+    {
+     "code": "99203",
+     "type": "CPT"
+    },
+    {
+     "code": "6901003",
+     "type": "CDM"
+    },
+    {
+     "code": "761",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 859.0,
+     "discounted_cash": 644.25,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "E&M-NEW PATIENT-LVL IV",
+   "code_information": [
+    {
+     "code": "99204",
+     "type": "CPT"
+    },
+    {
+     "code": "6019204",
+     "type": "CDM"
+    },
+    {
+     "code": "510",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 1218.0,
+     "discounted_cash": 913.5,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "E&M-NEW PATIENT-LVL IV",
+   "code_information": [
+    {
+     "code": "99204",
+     "type": "CPT"
+    },
+    {
+     "code": "6901004",
+     "type": "CDM"
+    },
+    {
+     "code": "761",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 1218.0,
+     "discounted_cash": 913.5,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "E&M-NEW PATIENT-LVL V",
+   "code_information": [
+    {
+     "code": "99205",
+     "type": "CPT"
+    },
+    {
+     "code": "6019205",
+     "type": "CDM"
+    },
+    {
+     "code": "510",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 1674.0,
+     "discounted_cash": 1255.5,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "E&M-NEW PATIENT-LVL V",
+   "code_information": [
+    {
+     "code": "99205",
+     "type": "CPT"
+    },
+    {
+     "code": "6901005",
+     "type": "CDM"
+    },
+    {
+     "code": "761",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 1674.0,
+     "discounted_cash": 1255.5,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "HEPATIC FUNCTION PANEL",
+   "code_information": [
+    {
+     "code": "80076",
+     "type": "CPT"
+    },
+    {
+     "code": "4150109",
+     "type": "CDM"
+    },
+    {
+     "code": "300",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 98.0,
+     "discounted_cash": 73.5,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "LIPID PANEL",
+   "code_information": [
+    {
+     "code": "80061",
+     "type": "CPT"
+    },
+    {
+     "code": "4120062",
+     "type": "CDM"
+    },
+    {
+     "code": "300",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 24.0,
+     "discounted_cash": 18.0,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "MRI BRAIN WO/W CONTRAST",
+   "code_information": [
+    {
+     "code": "70553",
+     "type": "CPT"
+    },
+    {
+     "code": "5250816",
+     "type": "CDM"
+    },
+    {
+     "code": "610",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 14740.0,
+     "discounted_cash": 11055.0,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "OBSTETRICS PROFILE",
+   "code_information": [
+    {
+     "code": "80055",
+     "type": "CPT"
+    },
+    {
+     "code": "4120215",
+     "type": "CDM"
+    },
+    {
+     "code": "300",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 84.0,
+     "discounted_cash": 63.0,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "OT THERAPTC EXER EA 15",
+   "code_information": [
+    {
+     "code": "97110",
+     "type": "CPT"
+    },
+    {
+     "code": "5805296",
+     "type": "CDM"
+    },
+    {
+     "code": "430",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 403.0,
+     "discounted_cash": 302.25,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ],
+   "modifiers": "GO"
+  },
+  {
+   "description": "OT THERAPTC EXER EA15#2",
+   "code_information": [
+    {
+     "code": "97110",
+     "type": "CPT"
+    },
+    {
+     "code": "6041898",
+     "type": "CDM"
+    },
+    {
+     "code": "430",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 403.0,
+     "discounted_cash": 302.25,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ],
+   "modifiers": "GO"
+  },
+  {
+   "description": "OTA THERAPTC EXER EA15 #2",
+   "code_information": [
+    {
+     "code": "97110",
+     "type": "CPT"
+    },
+    {
+     "code": "5800027",
+     "type": "CDM"
+    },
+    {
+     "code": "430",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 403.0,
+     "discounted_cash": 302.25,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ],
+   "modifiers": "GO|CO"
+  },
+  {
+   "description": "POLYSOMNOGRAPHY",
+   "code_information": [
+    {
+     "code": "95810",
+     "type": "CPT"
+    },
+    {
+     "code": "6912105",
+     "type": "CDM"
+    },
+    {
+     "code": "740",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 13785.0,
+     "discounted_cash": 10338.75,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "PROTHROMBIN TIME",
+   "code_information": [
+    {
+     "code": "85610",
+     "type": "CPT"
+    },
+    {
+     "code": "4155610",
+     "type": "CDM"
+    },
+    {
+     "code": "300",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 48.0,
+     "discounted_cash": 36.0,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "PROTHROMBIN TIME",
+   "code_information": [
+    {
+     "code": "85610",
+     "type": "CPT"
+    },
+    {
+     "code": "7255610",
+     "type": "CDM"
+    },
+    {
+     "code": "300",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 60.0,
+     "discounted_cash": 45.0,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "PSA TOTAL",
+   "code_information": [
+    {
+     "code": "84153",
+     "type": "CPT"
+    },
+    {
+     "code": "4126316",
+     "type": "CDM"
+    },
+    {
+     "code": "300",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 32.0,
+     "discounted_cash": 24.0,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "PSA TOTAL",
+   "code_information": [
+    {
+     "code": "84153",
+     "type": "CPT"
+    },
+    {
+     "code": "7256316",
+     "type": "CDM"
+    },
+    {
+     "code": "300",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 588.0,
+     "discounted_cash": 441.0,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "PT THER EX EA 15",
+   "code_information": [
+    {
+     "code": "97110",
+     "type": "CPT"
+    },
+    {
+     "code": "5705296",
+     "type": "CDM"
+    },
+    {
+     "code": "420",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 403.0,
+     "discounted_cash": 302.25,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ],
+   "modifiers": "GP"
+  },
+  {
+   "description": "PT THER EX EA 15 #2",
+   "code_information": [
+    {
+     "code": "97110",
+     "type": "CPT"
+    },
+    {
+     "code": "6041540",
+     "type": "CDM"
+    },
+    {
+     "code": "420",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 403.0,
+     "discounted_cash": 302.25,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ],
+   "modifiers": "GP"
+  },
+  {
+   "description": "PTA THER EX EA 15 #2",
+   "code_information": [
+    {
+     "code": "97110",
+     "type": "CPT"
+    },
+    {
+     "code": "6040052",
+     "type": "CDM"
+    },
+    {
+     "code": "420",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 403.0,
+     "discounted_cash": 302.25,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ],
+   "modifiers": "GP|CQ"
+  },
+  {
+   "description": "PTT",
+   "code_information": [
+    {
+     "code": "85730",
+     "type": "CPT"
+    },
+    {
+     "code": "4105700",
+     "type": "CDM"
+    },
+    {
+     "code": "300",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 359.0,
+     "discounted_cash": 269.25,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "PTT",
+   "code_information": [
+    {
+     "code": "85730",
+     "type": "CPT"
+    },
+    {
+     "code": "4175700",
+     "type": "CDM"
+    },
+    {
+     "code": "300",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 1.0,
+     "discounted_cash": 0.75,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "PULMONARY STRESS TST",
+   "code_information": [
+    {
+     "code": "94618",
+     "type": "CPT"
+    },
+    {
+     "code": "6014618",
+     "type": "CDM"
+    },
+    {
+     "code": "460",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 810.0,
+     "discounted_cash": 607.5,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "PULSE OXIMTRY CONTINUOUS",
+   "code_information": [
+    {
+     "code": "94762",
+     "type": "CPT"
+    },
+    {
+     "code": "5504762",
+     "type": "CDM"
+    },
+    {
+     "code": "460",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 1620.0,
+     "discounted_cash": 1215.0,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "RENAL FUNCTION PANEL",
+   "code_information": [
+    {
+     "code": "80069",
+     "type": "CPT"
+    },
+    {
+     "code": "4150069",
+     "type": "CDM"
+    },
+    {
+     "code": "300",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 104.0,
+     "discounted_cash": 78.0,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "SPINE LUMBAR MIN 4VWS",
+   "code_information": [
+    {
+     "code": "72110",
+     "type": "CPT"
+    },
+    {
+     "code": "4902110",
+     "type": "CDM"
+    },
+    {
+     "code": "320",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 2039.0,
+     "discounted_cash": 1529.25,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "TSH",
+   "code_information": [
+    {
+     "code": "84443",
+     "type": "CPT"
+    },
+    {
+     "code": "4124443",
+     "type": "CDM"
+    },
+    {
+     "code": "300",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 29.0,
+     "discounted_cash": 21.75,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "UA AUTO W/MICRO",
+   "code_information": [
+    {
+     "code": "81001",
+     "type": "CPT"
+    },
+    {
+     "code": "4101001",
+     "type": "CDM"
+    },
+    {
+     "code": "300",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 412.0,
+     "discounted_cash": 309.0,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "UA AUTO W/MICRO",
+   "code_information": [
+    {
+     "code": "81001",
+     "type": "CPT"
+    },
+    {
+     "code": "4171001",
+     "type": "CDM"
+    },
+    {
+     "code": "300",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 1.0,
+     "discounted_cash": 0.75,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "11-DEOXYXORTISL",
+   "code_information": [
+    {
+     "code": "82634",
+     "type": "CPT"
+    },
+    {
+     "code": "7252517",
+     "type": "CDM"
+    },
+    {
+     "code": "300",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 519.0,
+     "discounted_cash": 389.25,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "3D ECHO IMG CGEN CAR ANOMAL",
+   "code_information": [
+    {
+     "code": "93319",
+     "type": "CPT"
+    },
+    {
+     "code": "4603324",
+     "type": "CDM"
+    },
+    {
+     "code": "483",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 1691.0,
+     "discounted_cash": 1268.25,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "3D IMAGING W POSTPROCESS",
+   "code_information": [
+    {
+     "code": "76377",
+     "type": "CPT"
+    },
+    {
+     "code": "4917637",
+     "type": "CDM"
+    },
+    {
+     "code": "350",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 2129.0,
+     "discounted_cash": 1596.75,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "3D IMAGING W POSTPROCESS",
+   "code_information": [
+    {
+     "code": "76377",
+     "type": "CPT"
+    },
+    {
+     "code": "5057637",
+     "type": "CDM"
+    },
+    {
+     "code": "350",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 2129.0,
+     "discounted_cash": 1596.75,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "3D IMAGNG NO POSTPROCESS",
+   "code_information": [
+    {
+     "code": "76376",
+     "type": "CPT"
+    },
+    {
+     "code": "4606377",
+     "type": "CDM"
+    },
+    {
+     "code": "402",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 1691.0,
+     "discounted_cash": 1268.25,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "3D IMAGNG NO POSTPROCESS",
+   "code_information": [
+    {
+     "code": "76376",
+     "type": "CPT"
+    },
+    {
+     "code": "5057636",
+     "type": "CDM"
+    },
+    {
+     "code": "350",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 2054.0,
+     "discounted_cash": 1540.5,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "AA 4.25% D5 EL/CA 1L TPN",
+   "drug_information": {
+    "unit": 1.0,
+    "type": "EA"
+   },
+   "code_information": [
+    {
+     "code": "J3490",
+     "type": "HCPCS"
+    },
+    {
+     "code": "5412011",
+     "type": "CDM"
+    },
+    {
+     "code": "258",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 271.0,
+     "discounted_cash": 203.25,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "AA 4.25%D5 EL/CA 2L TPN",
+   "drug_information": {
+    "unit": 1.0,
+    "type": "EA"
+   },
+   "code_information": [
+    {
+     "code": "J3490",
+     "type": "HCPCS"
+    },
+    {
+     "code": "5412012",
+     "type": "CDM"
+    },
+    {
+     "code": "258",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 494.0,
+     "discounted_cash": 370.5,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "AA 5% D15 2L TPN",
+   "drug_information": {
+    "unit": 1.0,
+    "type": "EA"
+   },
+   "code_information": [
+    {
+     "code": "J3490",
+     "type": "HCPCS"
+    },
+    {
+     "code": "5412023",
+     "type": "CDM"
+    },
+    {
+     "code": "258",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 303.0,
+     "discounted_cash": 227.25,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  },
+  {
+   "description": "AA 5% D15 EL/CA 2L TPN",
+   "drug_information": {
+    "unit": 1.0,
+    "type": "EA"
+   },
+   "code_information": [
+    {
+     "code": "J3490",
+     "type": "HCPCS"
+    },
+    {
+     "code": "5412004",
+     "type": "CDM"
+    },
+    {
+     "code": "258",
+     "type": "RC"
+    }
+   ],
+   "standard_charges": [
+    {
+     "gross_charge": 678.0,
+     "discounted_cash": 508.5,
+     "setting": "both",
+     "billing_class": "facility"
+    }
+   ]
+  }
+ ]
+}

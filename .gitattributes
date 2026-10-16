@@ -3,3 +3,5 @@
 *.bat text eol=crlf
 *.png binary
 *.parquet binary
+# Test fixtures are real hospital data; keep their bytes exactly (some values contain CRLF)
+tests/fixtures/** -text
