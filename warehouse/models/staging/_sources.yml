@@ -11,6 +11,11 @@ sources:
           ingest/hospitals/load.py. Partitioned by state.
       - name: source_files
         description: Every download attempt of a hospital price file (ingest/hospitals/download.py).
+      - name: payer_plans
+        description: >
+          Distinct payer and plan names per hospital across every parsed file
+          (ingest/hospitals/payer_plans.py), so payer mapping covers hospitals whose prices
+          aren't loaded.
       - name: compliance_checks
         description: >
           One row per hospital x rule from ingest/hospitals/compliance.py. passed is null

@@ -1,0 +1,39 @@
+priority,pattern,payer_group,notes
+10,self[ _-]?pay,Self pay,
+20,tricare,TRICARE,
+21,triwest|veteran|champva|^node va$|va community,VA Community Care,
+30,healthspring|health spring,Healthspring,Cigna's former Medicare business
+31,cigna,Cigna,
+40,aetna,Aetna,includes ZAETNA_ and AETNA_US_HEALTHCARE
+41,mercy care,Mercy Care,
+45,united mine workers,United Mine Workers of America,before the UnitedHealthcare rule
+50,ambetter|allwell|wellcare|arizona complete|az complete|complete health|complete care|health ?net|celtic|bridgeway,Centene,
+52,care ?1st|care first,Centene,Care1st
+55,molina,Molina Healthcare,
+60,((bcbs|bxbs|blue[ _]?cross)[^|]*(az|arizona)|(az|arizona)[^|]*(bcbs|blue[ _]?cross)|blue_cross_030),Blue Cross Blue Shield of Arizona,
+61,health ?choice,Blue Cross Blue Shield of Arizona,Health Choice is BCBSAZ's Medicaid and marketplace arm
+62,bcbs|bxbs|blue[ _]?cross,Blue Cross Blue Shield (unspecified),
+70,apipa|unitedhealth|united health|united_health|^united$|uhc|optum|aarp|umr|united medical resources|united medicare,UnitedHealthcare,
+71,sierra|health ?plan of n(e)?v|^hpn |healthplan of nv,UnitedHealthcare,Sierra Health and Health Plan of Nevada are UnitedHealth subsidiaries
+72,humana,Humana,
+73,banner,Banner Health Plans,
+74,devoted,Devoted Health,
+75,alignment,Alignment Health,
+76,clover,Clover Health,
+77,scan,SCAN Health Plan,
+78,caremore|carelon|wellpoint|amerigroup|anthem|beacon,Elevance,
+79,kaiser,Kaiser Permanente,
+80,oscar,Oscar Health,
+81,gold kidney,Gold Kidney Health Plan,
+82,magellan,Magellan,
+83,multiplan|phcs|beech ?street,MultiPlan,
+84,first health|coventry,First Health,
+85,healthsmart,HealthSmart,
+86,zelis,Zelis,
+87,three rivers,Three Rivers Provider Network,
+88,fresenius,Fresenius,
+89,naphcare|geo group|inmate|prison|sheriff,Correctional health,
+90,seven corners|vumi|travel,Travel insurance,
+91,gila river|pascua yaqui|san carlos|\mihs\M,Tribal health programs,
+95,^ahc |ahccc?s|acchs|medicaid,AHCCCS fee-for-service,AHC-prefixed names not caught above
+96,^medicare|^node medicare,Medicare fee-for-service,

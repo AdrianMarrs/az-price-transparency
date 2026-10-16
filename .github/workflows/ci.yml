@@ -28,4 +28,5 @@ jobs:
         run: |
           uv run python scripts/load_fixtures.py
           uv run python -m ingest.hospitals.compliance
+          uv run python -m ingest.hospitals.payer_plans
           uv run dbt build --project-dir warehouse --profiles-dir warehouse

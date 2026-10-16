@@ -1,0 +1,13 @@
+priority,strength,pattern,market,notes
+10,strong,self[ _-]?pay,self_pay,
+20,strong,work(er)?s?[ _]?comp,workers_comp,
+30,strong,tricare|triwest|veteran|champva|va community|^node va$|humana va|humana military,military_va,
+42,strong,behavioral|behavior_health,behavioral_health,
+43,strong,transplant,specialty_network,
+40,strong,inmate|prison|correction|naphcare|geo group|sheriff,correctional,
+45,strong,travel|vumi|seven corners,travel_international,
+50,strong,medicare.?advantage|mcr[ _]?adv|_adv_|advantage|managed medicare|medicare managed care|medicare/medicaid|dual|snp|aarp|generations|pathway|azpc|senior,medicare_advantage,checked before Medicaid so dual plans count as Medicare Advantage
+60,strong,medicaid|ahcccs|ahccs|acchs|^ahc |mcaid|family care|family plan|\mufc\M|cmdp|\mddd\M|\mcrs\M|\mltc\M,medicaid,
+70,strong,exchange|marketplace|\maca\M|\mqhp\M|\mhix\M|\mhie\M|ambetter|\mifp\M|individual,exchange,
+80,weak,medicare,medicare_advantage,a private insurer's Medicare contract; never overrides an exact seed entry
+90,weak,commercial|commerical|\mcomm\M|\mppo\M|\mhmo\M|\mpos\M|\mepo\M|all products|all plans|all other plans|choice|open access|localflex|local plus|exclusive network,commercial,

@@ -21,7 +21,8 @@ with mri as (
         f.amount
     from {{ ref('fct_prices') }} as f
     join {{ ref('dim_hospitals') }} as h using (ccn)
-    left join {{ ref('dim_payers') }} as p using (payer_name)
+    left join {{ ref('dim_payer_plans') }} as p
+        on p.payer_name = f.payer_name and p.plan_name is not distinct from f.plan_name
     where f.service_key = 'CPT/HCPCS:73721'
       and f.setting in ('outpatient', 'both')
       and f.billing_class = 'facility'

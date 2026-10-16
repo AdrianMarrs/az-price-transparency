@@ -1,0 +1,40 @@
+unit_tests:
+  - name: dim_payer_plans_takes_market_from_payer_and_plan
+    description: >
+      The cases that motivated payer+plan mapping: a work-comp plan under a commercial
+      payer, a generic "Medicare" plan under a private insurer, a seed entry a weak pattern
+      must not override, a payer known only by pattern, and one nobody recognizes.
+    model: dim_payer_plans
+    given:
+      - input: source('raw', 'payer_plans')
+        rows:
+          - {ccn: "030148", payer_name: "BCBS AZ", plan_name: "BCBS AZ Work Comp", rows: 5}
+          - {ccn: "030148", payer_name: "BCBS AZ", plan_name: "BCBS AZ ALL", rows: 7}
+          - {ccn: "030002", payer_name: "United", plan_name: "Medicare|All Plans", rows: 3}
+          - {ccn: "030006", payer_name: "NODE Medicare Traditional", plan_name: "NODE Medicare Traditional", rows: 2}
+          - {ccn: "030006", payer_name: "Health Choice", plan_name: "Medicaid|All Plans", rows: 4}
+          - {ccn: "030006", payer_name: "Mystery Plan Co", plan_name: "Gold", rows: 1}
+      - input: ref('stg_hospital_charges')
+        rows: []
+      - input: ref('payer_aliases')
+        rows:
+          - {payer_name: "BCBS AZ", payer_group: "Blue Cross Blue Shield of Arizona", market: "commercial"}
+          - {payer_name: "NODE Medicare Traditional", payer_group: "Medicare fee-for-service", market: "medicare_ffs"}
+      - input: ref('payer_group_patterns')
+        rows:
+          - {priority: 61, pattern: "health ?choice", payer_group: "Blue Cross Blue Shield of Arizona"}
+          - {priority: 70, pattern: "^united$|uhc", payer_group: "UnitedHealthcare"}
+      - input: ref('market_patterns')
+        rows:
+          - {priority: 20, strength: "strong", pattern: "work(er)?s?[ _]?comp", market: "workers_comp"}
+          - {priority: 60, strength: "strong", pattern: "medicaid", market: "medicaid"}
+          - {priority: 80, strength: "weak", pattern: "medicare", market: "medicare_advantage"}
+          - {priority: 90, strength: "weak", pattern: "all plans", market: "commercial"}
+    expect:
+      rows:
+        - {payer_name: "BCBS AZ", plan_name: "BCBS AZ Work Comp", payer_group: "Blue Cross Blue Shield of Arizona", market: "workers_comp", market_source: "strong_pattern"}
+        - {payer_name: "BCBS AZ", plan_name: "BCBS AZ ALL", payer_group: "Blue Cross Blue Shield of Arizona", market: "commercial", market_source: "alias"}
+        - {payer_name: "United", plan_name: "Medicare|All Plans", payer_group: "UnitedHealthcare", market: "medicare_advantage", market_source: "weak_pattern"}
+        - {payer_name: "NODE Medicare Traditional", plan_name: "NODE Medicare Traditional", payer_group: "Medicare fee-for-service", market: "medicare_ffs", market_source: "alias"}
+        - {payer_name: "Health Choice", plan_name: "Medicaid|All Plans", payer_group: "Blue Cross Blue Shield of Arizona", market: "medicaid", market_source: "strong_pattern"}
+        - {payer_name: "Mystery Plan Co", plan_name: "Gold", payer_group: "Mystery Plan Co", market: "unknown", market_source: "none"}

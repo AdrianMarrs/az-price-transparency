@@ -26,6 +26,20 @@ models:
                          employer_direct, specialty_network, behavioral_health, tribal,
                          correctional, self_pay, mixed, other, unknown, unmapped]
 
+  - name: dim_payer_plans
+    description: Each payer x plan name mapped to a parent company and a market, with how.
+    columns:
+      - name: payer_plan_key
+        data_tests: [unique, not_null]
+      - name: market
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [commercial, medicare_advantage, medicare_ffs, medicaid, exchange,
+                         military_va, workers_comp, network_rental, travel_international,
+                         employer_direct, specialty_network, behavioral_health, tribal,
+                         correctional, self_pay, mixed, other, unknown]
+
   - name: dim_services
     columns:
       - name: service_key
