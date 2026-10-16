@@ -1,6 +1,6 @@
 # 02 · Every Arizona hospital
 
-Phase 2 took the Pima County pipeline statewide and put it on a schedule. Of Arizona's 95 in-scope hospitals, 72 price files were obtained and all 72 parse (11.8M prices); 39 hospitals pass every compliance rule we can check, and 59 publish usable insurer prices. Dagster now runs the pipeline weekly, one partition per hospital.
+Phase 2 took the Pima County pipeline statewide and put it on a schedule. Of Arizona's 95 in-scope hospitals, 79 price files were downloaded and all 79 parse (13.7M prices, all loaded into Postgres); 39 hospitals pass every compliance rule we can check, and 65 publish usable insurer prices. Dagster now runs the pipeline weekly, one partition per hospital.
 
 Data downloaded and checked 2026-10-16. The full compliance report is [docs/reports/arizona-compliance-2026-10-16.md](reports/arizona-compliance-2026-10-16.md).
 
@@ -21,26 +21,24 @@ Every candidate was verified by fetching its `cms-hpt.txt`, which caught two wro
 | --- | ---: |
 | Found by a program | 50 |
 | Found, but only when claiming to be a browser (Banner, Mayo) | 19 |
-| Found by hand after a bot challenge blocked the program (Carondelet) | 3 |
+| Found by hand after a bot challenge or 403 blocked the program (Carondelet, Abrazo, Northern Arizona Healthcare, Valleywise, Onvida, Arizona Spine & Joint, City of Hope) | 13 |
 | Found, but `cms-hpt.txt` isn't in CMS's format | 2 |
-| Blocked by a bot challenge | 9 |
 | No `cms-hpt.txt` (404) or a web page instead | 7 |
 | File doesn't list this hospital | 2 |
-| Access refused (403) | 1 |
 
-Notable: East Valley ER & Hospital's `cms-hpt.txt` names a different hospital, in Oklahoma; HonorHealth Tempe is missing from HonorHealth's file; The Guidance Center serves its price file itself at `/cms-hpt.txt`; Destiny Springs' file points to a price file that returns 404.
+Notable: East Valley ER & Hospital's `cms-hpt.txt` names a different hospital, in Oklahoma; HonorHealth Tempe is missing from HonorHealth's file; The Guidance Center serves its price file itself at `/cms-hpt.txt`; Destiny Springs' file points to a price file that returns 404. Valleywise's file puts a blank line between every field, so the parser now starts a new location at each location-name line rather than at blank lines.
 
 ## Downloading and parsing
 
-- **Downloads:** 72 of 74 files with a known URL, 0.32 GB compressed. Mayo Clinic Arizona's file is **21.5 GB**, so the downloader skips files over 5 GB until there is a streaming parser.
-- **Parsing:** all 72 files read (target was 90%): 59 with service-code prices, 13 that bill only by revenue code (psychiatric hospitals and the four Exceptional Community Hospitals). New handling added for this: formats detected from content rather than file names (many URLs have none), zip files, a fallback reader for a CSV polars rejected (Kingman Regional, line breaks inside values), and a per-file outcome log (`data/parsed/parse_report.csv`, not in Git).
-- **Output:** 11,820,817 prices in 39 MB of Parquet. Only Pima County is loaded into Postgres for now (see open items).
+- **Downloads:** 79 of 84 files with a known URL. Three of the misses are the price files themselves refusing programs (HTTP 403 behind a bot challenge): Northern Arizona Healthcare's two zips (Flagstaff, Verde Valley) and City of Hope's; the fourth is Destiny Springs' 404. Mayo Clinic Arizona's file is **21.5 GB**, so the downloader skips files over 5 GB until there is a streaming parser.
+- **Parsing:** all 79 files read (target was 90%): 66 with service-code prices, 13 that bill only by revenue code (psychiatric hospitals and the four Exceptional Community Hospitals). New handling added for this: formats detected from content rather than file names (many URLs have none), zip files, a fallback reader for a CSV polars rejected (Kingman Regional, line breaks inside values), dropping rows that become identical after cleaning (536.13 vs 536.130), and a per-file outcome log (`data/parsed/parse_report.csv`, not in Git).
+- **Output:** 13,741,156 prices in 45 MB of Parquet, all loaded into Postgres (`LOAD_COUNTIES` now defaults to every county). The database is 7.4 GB with the warehouse built.
 
 ## Compliance
 
 Nine rules per hospital ([`ingest/hospitals/compliance.py`](../ingest/hospitals/compliance.py)), scored by dbt in `marts.hospital_compliance_scores`. Highlights:
 
-- **No insurer prices at all:** the three Carondelet hospitals (St. Joseph's, St. Mary's, Holy Cross) and the four Exceptional Community Hospitals.
+- **No insurer prices at all:** the three Carondelet hospitals (St. Joseph's, St. Mary's, Holy Cross), Abrazo Scottsdale and the four Exceptional Community Hospitals.
 - **Mostly percentages or formulas, not dollars:** six hospitals, as low as 3% in dollars (White Mountain Regional).
 - **CMS's own validator** (`@cmsgov/hpt-validator-cli` 1.10.8) agreed on five spot-checked files. It checks format, not substance: it passes a file with no insurer prices. It also corrected one of our findings: CMS accepts M/D/YYYY dates in CSV files.
 
@@ -87,7 +85,7 @@ hospital list -> price-file sources -> [per hospital] download -> parse -> load
 - One partition per hospital, so a bad file fails only its own run.
 - A Redis lock per hospital prevents two runs downloading the same file (tested by holding the lock by hand).
 - Asset checks flag a row count moving more than 30% between runs and a file older than a year.
-- A failure sensor posts to `ALERT_WEBHOOK_URL` when one is set.
+- A failure sensor posts to `ALERT_WEBHOOK_URL` when one is set; for now none is, so failures are only logged.
 - Weekly schedules (Mondays, Arizona time): discovery at 6:00, one run per hospital at 7:00, warehouse build at 11:00.
 
 ```
@@ -95,11 +93,18 @@ $env:DAGSTER_HOME = "$PWD\.dagster_home"
 uv run dagster dev -m orchestration.definitions
 ```
 
+## Decisions
+
+- **All of Arizona is loaded into Postgres**, not just Pima County.
+- **Blocked `cms-hpt.txt` files are copied by hand** in a browser (contacts removed) into `ingest/hospitals/manual_cms_hpt/`, and recorded as `found_manual_copy`, which still fails the machine-readable rule.
+- **The browser user-agent fallback stays**, and is recorded as `found_browser_ua_only`.
+- **Alerts: log only for now.** The webhook is wired but unset.
+- **Rehabilitation and long-term acute care hospitals are left out**; the CMS list doesn't include them.
+- **Hospitals are named** in the report and any write-up.
+
 ## Open items
 
-- **Load all of Arizona into Postgres?** About 11.8M rows, an estimated 4-8 GB more disk (the machine has about 20 GB free). Controlled by `LOAD_COUNTIES`.
-- **Copy 10 blocked `cms-hpt.txt` files by hand** (Abrazo x4, Northern Arizona Healthcare x2, Valleywise, Onvida, Arizona Spine & Joint, City of Hope), as was done for Carondelet.
-- **Alerts:** where should failures go (Slack webhook, email)?
+- **Three blocked price files** (Flagstaff, Verde Valley, City of Hope) could be downloaded by hand in a browser; that needs a way to import a file downloaded manually.
+- **City of Hope's location** is mapped to "Western Regional Medical Center" (the former CTCA Goodyear entity) from its `cms-hpt.txt`; unconfirmed until its price file can be read.
 - **Mayo Clinic Arizona** needs a streaming parser (Phase 4 skill).
 - **Insurer names:** the last 20% of price rows have no market yet; needs a review pass.
-- **Scope:** the CMS list has no rehabilitation or long-term acute care hospitals.
