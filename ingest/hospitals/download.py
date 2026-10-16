@@ -2,12 +2,17 @@
 
 Usage:
     uv run python -m ingest.hospitals.download [--ccn 030006 ...]
+    uv run python -m ingest.hospitals.download --import-file 030023 path/to/file.zip
 
 Reads warehouse/seeds/hospital_sources.csv. Each file is streamed (never held in memory),
 hashed with SHA-256 as it arrives, and written gzip-compressed to
 data/raw/<yyyy-mm-dd>/<ccn>_<file name>.gz. Every attempt is recorded in raw.source_files.
 Nothing new is kept when the server says the file hasn't changed (ETag / Last-Modified)
 or when its checksum matches the last download.
+
+--import-file takes a file downloaded by hand in a browser, for price files that refuse
+programs (a bot challenge), and stores and records it the same way with access
+manual_download. Compliance still counts the download rule as failed for these.
 """
 
 import argparse
@@ -42,7 +47,7 @@ CREATE TABLE IF NOT EXISTS raw.source_files (
     url           text        NOT NULL,
     attempted_at  timestamptz NOT NULL,
     outcome       text        NOT NULL,  -- downloaded, unchanged, failed
-    access        text,                  -- direct, browser_ua_only
+    access        text,                  -- direct, browser_ua_only, manual_download
     http_status   int,
     format        text,
     sha256        text,
@@ -186,6 +191,40 @@ def record(conn: psycopg.Connection, row: dict, attempted_at: datetime) -> None:
     )
 
 
+def import_file(ccn: str, src: Path, url: str, day_dir: Path) -> dict:
+    """Store a file downloaded by hand as data/raw/<day>/<ccn>_<name>.gz; returns its row."""
+    day_dir.mkdir(parents=True, exist_ok=True)
+    dest = day_dir / f"{ccn}_{src.name}.gz"
+    digest, size = hashlib.sha256(), 0
+    part = dest.with_name(dest.name + ".part")
+    with src.open("rb") as f, gzip.open(part, "wb", compresslevel=6) as out:
+        while chunk := f.read(CHUNK):
+            digest.update(chunk)
+            size += len(chunk)
+            out.write(chunk)
+    part.replace(dest)
+    return {"ccn": ccn, "url": url, "outcome": "downloaded", "access": "manual_download",
+            "format": file_format(src.name, ""), "sha256": digest.hexdigest(),
+            "size_bytes": size, "path": dest.as_posix()}  # fmt: skip
+
+
+def import_manual(ccn: str, src: Path) -> dict:
+    """import_file for one hospital, using its price file URL from the sources seed."""
+    sources = pl.read_csv(SOURCES_PATH, infer_schema_length=0).filter(pl.col("ccn") == ccn)
+    if sources.is_empty():
+        raise SystemExit(f"{ccn} is not in {SOURCES_PATH}")
+    url = sources["mrf_url"][0] or ""
+    if url and Path(httpx.URL(url).path).name != src.name:
+        print(f"note: {src.name} is not the file named in the sources seed ({url})")
+    started = datetime.now(UTC)
+    row = import_file(ccn, src, url, RAW_DIR / started.strftime("%Y-%m-%d"))
+    with psycopg.connect(DATABASE_URL, autocommit=True) as conn:
+        conn.execute(SCHEMA_SQL)
+        record(conn, row, started)
+    print(f"{ccn}  imported {row['size_bytes'] / 1e6:,.0f} MB  {row['path']}")
+    return row
+
+
 def download_hospitals(ccns: list[str] | None = None) -> list[dict]:
     """Download (or confirm unchanged) each hospital's price file; returns the rows recorded.
     Hospitals with no price file URL are skipped. Used by main() and by Dagster."""
@@ -218,7 +257,13 @@ def download_hospitals(ccns: list[str] | None = None) -> list[dict]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--ccn", nargs="*", help="only these hospitals")
-    download_hospitals(parser.parse_args().ccn)
+    parser.add_argument("--import-file", nargs=2, metavar=("CCN", "PATH"),
+                        help="store a price file downloaded by hand instead of downloading")  # fmt: skip
+    args = parser.parse_args()
+    if args.import_file:
+        import_manual(args.import_file[0], Path(args.import_file[1]))
+    else:
+        download_hospitals(args.ccn)
 
 
 if __name__ == "__main__":

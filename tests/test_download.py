@@ -9,6 +9,7 @@ from ingest.hospitals.download import (
     download,
     download_once,
     file_format,
+    import_file,
 )
 
 URL = "https://example.org/files/123_example_standardcharges.csv"
@@ -131,3 +132,14 @@ def test_server_errors_are_retried_then_recorded(tmp_path, monkeypatch):
     row = download(always_down, "1", URL, tmp_path, None)
     assert row["outcome"] == "failed"
     assert "503" in row["error"]
+
+
+def test_import_file_stores_a_hand_download_like_a_download(tmp_path):
+    src = tmp_path / "123_example_standardcharges.csv"
+    src.write_bytes(BODY)
+    row = import_file("030006", src, URL, tmp_path / "raw")
+    assert row["outcome"] == "downloaded" and row["access"] == "manual_download"
+    assert row["format"] == "csv" and row["size_bytes"] == len(BODY)
+    assert row["sha256"] == hashlib.sha256(BODY).hexdigest()
+    with gzip.open(row["path"]) as f:
+        assert f.read() == BODY

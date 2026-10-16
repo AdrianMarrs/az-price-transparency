@@ -4,11 +4,11 @@ A free, open, auditable price lookup for Pima County, Arizona: named hospitals, 
 
 Behind it is a data pipeline that collects the prices hospitals and health insurers are required to publish, validates and normalizes them, and adds an AI query layer.
 
-**Status:** Phases 1-2 (hospital data, local). All 95 in-scope Arizona hospitals checked; 79 price files parsed into 13.7M prices, all loaded into Postgres; weekly pipeline in Dagster. Cloud (Phase 3) not started.
+**Status:** Phases 1-2 (hospital data, local). All 95 in-scope Arizona hospitals checked; 82 price files parsed into 14.6M prices, all loaded into Postgres; weekly pipeline in Dagster. Cloud (Phase 3) not started.
 
 ## Findings so far
 
-- **39 of 95 Arizona hospitals pass every price transparency rule we can check**; 65 publish usable insurer prices. [Compliance report](docs/reports/arizona-compliance-2026-10-16.md)
+- **39 of 95 Arizona hospitals pass every price transparency rule we can check**; 68 publish usable insurer prices. [Compliance report](docs/reports/arizona-compliance-2026-10-16.md)
 - **Eight hospitals publish no insurer prices at all**, and 13 block programs (bot challenges or refused access) from reading `cms-hpt.txt`, the file meant to point programs to their prices. Three of them block the price file itself too.
 - **The insurer market matters more than the hospital.** In Pima County, a knee MRI's median insurer price runs from $167 (Medicaid) to $1,080 (commercial). [Details](docs/01-hospitals.md)
 

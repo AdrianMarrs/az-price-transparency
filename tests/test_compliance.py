@@ -80,3 +80,10 @@ def test_unreadable_file_fails_parse_rule_only():
     v = verdicts(FOUND, DOWNLOADED, {"outcome": "failed", "error": "JSONDecodeError"})
     assert v["price_file_parses"] is False
     assert all(v[rule] is None for rule in list(RULES)[4:])
+
+
+def test_a_hand_download_fails_the_download_rule_but_its_contents_are_checked():
+    manual = DOWNLOADED | {"access": "manual_download"}
+    v = verdicts(FOUND, manual, GOOD_PARSE)
+    assert v["price_file_downloads"] is False
+    assert v["payer_prices_present"] is True

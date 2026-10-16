@@ -71,6 +71,8 @@ def check_hospital(source: dict, download: dict | None, parse: dict | None, toda
         checks.append(("price_file_downloads", None, "not attempted"))
     else:
         ok = download["outcome"] in ("downloaded", "unchanged", "skipped_too_large")
+        if download.get("access") == "manual_download":  # programs are refused it
+            ok, download = False, {"outcome": "blocked for programs; downloaded by hand"}
         checks.append(("price_file_downloads", ok, download.get("error") or download["outcome"]))
 
     if parse is None or parse.get("outcome") == "deferred_too_large":
@@ -107,10 +109,11 @@ def check_hospital(source: dict, download: dict | None, parse: dict | None, toda
 def latest_downloads(conn: psycopg.Connection) -> dict[str, dict]:
     conn.execute(SCHEMA_SQL)  # so a fresh database (CI) has an empty table, not an error
     rows = conn.execute(
-        """SELECT DISTINCT ON (ccn) ccn, outcome, error FROM raw.source_files
+        """SELECT DISTINCT ON (ccn) ccn, outcome, access, error FROM raw.source_files
            ORDER BY ccn, attempted_at DESC"""
     ).fetchall()
-    return {ccn: {"outcome": outcome, "error": error} for ccn, outcome, error in rows}
+    return {ccn: {"outcome": outcome, "access": access, "error": error}
+            for ccn, outcome, access, error in rows}  # fmt: skip
 
 
 def main() -> None:
