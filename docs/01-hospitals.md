@@ -61,6 +61,21 @@ All 11 files parse in about 13 seconds; the output is 6 MB of Parquet.
 - **Sahuarita's rejects are a data error in the file**: the plan "NODE Devoted Health MCR ADV" has a blank payer name in its column header, so its negotiated prices cannot be attributed.
 - **Duplicates** are chargemaster lines that differ only by the hospital's internal item number (CDM); once that is dropped they are identical in every price-relevant field. In the Northwest files they are about a third of all rows.
 
+## Loading into Postgres (2026-10-16)
+
+`ingest/hospitals/load.py` replaces each hospital's rows in `raw.hospital_charges` (partitioned by state; all 11 hospitals are in `raw.hospital_charges_az`) in one transaction: `DELETE` by CCN, then `COPY`.
+
+| Method, 50,000 rows into an empty table | Rows per second | vs. COPY |
+| --- | ---: | ---: |
+| `COPY ... FROM STDIN (FORMAT csv)` | 586,468 | |
+| `executemany` (psycopg batches in pipeline mode) | 36,461 | 16x slower |
+| One `INSERT` per row, each committed | 1,823 | 322x slower |
+
+- **Full load:** 1,609,202 rows; steady-state COPY into the real table is about 200,000 rows/s (Banner Tucson's 369,274 rows in 1.7-1.9 s).
+- **Size in Postgres:** 529 MB (337 bytes per row) plus a 34 MB index, against 6 MB of Parquet for the same rows.
+- **Reloads needed two fixes.** Without an index on `ccn`, each hospital's `DELETE` scanned the whole partition (47 s for one hospital). And at the default `max_wal_size` of 1GB, a full reload triggered back-to-back checkpoints of 45-58 s each; local Postgres now runs with 4GB. Deleted rows also stay on disk until vacuumed (the table reached 1.5 GB after two reloads).
+- **Still open:** occasional 10-25 s stalls on Docker Desktop for Windows, waiting on WAL writes, while raw disk throughput measures 3.4-4.2 GB/s. To compare against RDS in Phase 3.
+
 ## Quirks the parser must handle (each becomes a test case)
 
 - **Column order differs** between files (Banner puts `modifiers` after `plan_name`; El Dorado puts `standard_charge|min`/`max` at the end). Read columns by name, never by position.
