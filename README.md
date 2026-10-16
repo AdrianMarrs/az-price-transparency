@@ -4,7 +4,26 @@ A free, open, auditable price lookup for Pima County, Arizona: named hospitals, 
 
 Behind it is a data pipeline that collects the prices hospitals and health insurers are required to publish, validates and normalizes them, and adds an AI query layer.
 
-**Status:** Phase 0, setup. Work in progress.
+**Status:** Phases 1-2 (hospital data, local). All 95 in-scope Arizona hospitals checked; 72 price files parsed into 11.8M prices; weekly pipeline in Dagster. Cloud (Phase 3) not started.
+
+## Findings so far
+
+- **39 of 95 Arizona hospitals pass every price transparency rule we can check**; 59 publish usable insurer prices. [Compliance report](docs/reports/arizona-compliance-2026-10-16.md)
+- **Seven hospitals publish no insurer prices at all**, and 13 block programs (bot challenges or refused access) from reading `cms-hpt.txt`, the file meant to point programs to their prices.
+- **The insurer market matters more than the hospital.** In Pima County, a knee MRI's median insurer price runs from $167 (Medicaid) to $1,080 (commercial). [Details](docs/01-hospitals.md)
+
+## Running it
+
+```
+docker compose up -d                                   # Postgres, Redis
+uv sync
+uv run pytest
+uv run dbt build --project-dir warehouse --profiles-dir warehouse
+$env:DAGSTER_HOME = "$PWD\.dagster_home"               # PowerShell
+uv run dagster dev -m orchestration.definitions        # pipeline UI at localhost:3000
+```
+
+Design notes, one per phase: [setup](docs/00-setup.md), [hospital files](docs/01-hospitals.md), [every Arizona hospital](docs/02-arizona.md).
 
 ## What it does
 
@@ -17,15 +36,15 @@ Behind it is a data pipeline that collects the prices hospitals and health insur
 ## Layout
 
 ```
-ingest/        Python loaders (hospitals/, insurers/)
-warehouse/     dbt project
-infra/         Terraform
-api/           Lambda API
-web/           React site
-mcp/           MCP server
-docs/          design docs, one per phase
-tests/
+ingest/hospitals/   find, download, parse, load and check hospital price files
+orchestration/      Dagster assets, schedules and checks
+warehouse/          dbt project (seeds, staging, marts, analyses)
+scripts/            one-off tools: profiling, test fixtures, compliance report
+docs/               design notes, one per phase; reports/
+tests/              pytest, with real-row fixtures from every file format
 ```
+
+Planned: `infra/` (Terraform), `api/` (Lambda), `web/` (React), `mcp/` (MCP server), `ingest/insurers/`.
 
 ## Stack
 
