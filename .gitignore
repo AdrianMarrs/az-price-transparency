@@ -238,3 +238,6 @@ warehouse/.user.yml
 *.tfstate.*
 *.tfplan
 crash.log
+
+# Terraform backend settings for infra/main (names the state bucket, which includes the account id)
+infra/main/backend.hcl

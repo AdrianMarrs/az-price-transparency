@@ -1,0 +1,1 @@
+bucket = "az-price-transparency-tfstate-<account id>"  # infra/bootstrap output state_bucket
