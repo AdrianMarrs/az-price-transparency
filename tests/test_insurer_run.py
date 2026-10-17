@@ -117,3 +117,18 @@ def test_a_rerun_skips_done_files_and_retries_failed_ones(runner):
     third = go(skip_failed=True)
     assert third["done_this_run"] == 0 and third["failed_this_run"] == 0
     assert third["done_total"] == 1 and third["failed_total"] == 1
+
+
+def test_a_new_npi_list_reruns_done_files(runner, monkeypatch):
+    go, _, _ = runner
+    go()
+    npis = run.hospital_npis()
+    monkeypatch.setattr(run, "hospital_npis", lambda: npis | {1234567890: "030011"})
+    again = go()
+    assert again["done_this_run"] == 1  # the done file, parsed with the old list, runs again
+
+
+def test_npis_version_ignores_order_and_sees_changes():
+    a = run.npis_version({1: "030006", 2: "030011"})
+    assert a == run.npis_version({2: "030011", 1: "030006"})
+    assert a != run.npis_version({1: "030006", 2: "030012"})

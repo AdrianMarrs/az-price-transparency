@@ -85,3 +85,17 @@ models:
         data_tests: [unique, not_null]
       - name: prices
         data_tests: [not_null]
+
+  - name: insurer_hospital_coverage
+    description: >
+      One row per in-scope hospital x insurer: whether the insurer's files include the
+      hospital's own NPIs, whether the hospital's file lists the insurer, and how many rates
+      are comparable.
+    columns:
+      - name: coverage_key
+        description: ccn|insurer
+        data_tests: [unique, not_null]
+      - name: coverage
+        data_tests:
+          - accepted_values:
+              arguments: {values: [both, insurer_only, hospital_file_only, neither]}

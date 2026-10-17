@@ -1,0 +1,35 @@
+unit_tests:
+  - name: int_insurer_rates_checked_flags_impossible_and_outlying_rates
+    description: >
+      Seven hospitals price one code (median $100): one at 20x is over_10x_peers and one at
+      $5 under_tenth_of_peers. A rate with a modifier is compared only with that modifier,
+      and two hospitals are too few peers to flag anything. Zero and a 150% rate are
+      impossible whatever the peers.
+    model: int_insurer_rates_checked
+    given:
+      - input: ref('stg_insurer_rates')
+        rows:
+          - {price_id: a, insurer: cigna, ccn: "1", service_key: "CPT/HCPCS:1", setting: outpatient, billing_class: facility, price_type: negotiated_dollar, amount: 100}
+          - {price_id: b, insurer: cigna, ccn: "2", service_key: "CPT/HCPCS:1", setting: outpatient, billing_class: facility, price_type: negotiated_dollar, amount: 90}
+          - {price_id: c, insurer: cigna, ccn: "3", service_key: "CPT/HCPCS:1", setting: outpatient, billing_class: facility, price_type: negotiated_dollar, amount: 110}
+          - {price_id: d, insurer: cigna, ccn: "4", service_key: "CPT/HCPCS:1", setting: outpatient, billing_class: facility, price_type: negotiated_dollar, amount: 100}
+          - {price_id: e, insurer: cigna, ccn: "5", service_key: "CPT/HCPCS:1", setting: outpatient, billing_class: facility, price_type: negotiated_dollar, amount: 100}
+          - {price_id: f, insurer: cigna, ccn: "6", service_key: "CPT/HCPCS:1", setting: outpatient, billing_class: facility, price_type: negotiated_dollar, amount: 2000}
+          - {price_id: g, insurer: cigna, ccn: "7", service_key: "CPT/HCPCS:1", setting: outpatient, billing_class: facility, price_type: negotiated_dollar, amount: 5}
+          - {price_id: h, insurer: cigna, ccn: "1", service_key: "CPT/HCPCS:1", setting: outpatient, billing_class: facility, price_type: negotiated_dollar, modifiers: "26", amount: 9000}
+          - {price_id: i, insurer: cigna, ccn: "2", service_key: "CPT/HCPCS:1", setting: outpatient, billing_class: facility, price_type: negotiated_dollar, modifiers: "26", amount: 10}
+          - {price_id: j, insurer: cigna, ccn: "3", service_key: "CPT/HCPCS:2", setting: outpatient, billing_class: facility, price_type: negotiated_dollar, amount: 0}
+          - {price_id: k, insurer: cigna, ccn: "3", service_key: "CPT/HCPCS:2", setting: outpatient, billing_class: facility, price_type: negotiated_percentage, amount: 150}
+    expect:
+      rows:
+        - {price_id: a, rate_flag: null}
+        - {price_id: b, rate_flag: null}
+        - {price_id: c, rate_flag: null}
+        - {price_id: d, rate_flag: null}
+        - {price_id: e, rate_flag: null}
+        - {price_id: f, rate_flag: over_10x_peers}
+        - {price_id: g, rate_flag: under_tenth_of_peers}
+        - {price_id: h, rate_flag: null}
+        - {price_id: i, rate_flag: null}
+        - {price_id: j, rate_flag: not_positive}
+        - {price_id: k, rate_flag: percentage_over_100}

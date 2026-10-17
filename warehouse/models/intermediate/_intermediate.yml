@@ -1,0 +1,13 @@
+version: 2
+
+models:
+  - name: int_insurer_rates_checked
+    description: stg_insurer_rates with its peer median and a rate_flag (see the model's header).
+    columns:
+      - name: price_id
+        data_tests: [unique, not_null]
+      - name: rate_flag
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [not_positive, percentage_over_100, over_10x_peers, under_tenth_of_peers]

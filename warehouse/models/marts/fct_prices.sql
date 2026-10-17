@@ -10,6 +10,9 @@
 -- (an insurer's Transparency in Coverage file; payer_name is the insurer, plan_name its
 -- network). Insurer rates are kept only for codes some hospital prices, so every row has
 -- a dim_services entry. The serving models read hospital rows only.
+--
+-- rate_flag marks insurer rates far from other hospitals' rates for the same service
+-- (int_insurer_rates_checked); impossible ones (zero, negative, over 100%) are left out.
 
 with hospital as (
     select
@@ -30,7 +33,8 @@ with hospital as (
         amount,
         algorithm,
         is_bundled,
-        source_file_id
+        source_file_id,
+        null::text as rate_flag
     from {{ ref('stg_hospital_charges') }}
 ),
 
@@ -53,9 +57,12 @@ insurer as (
         r.amount,
         null::text as algorithm,
         false as is_bundled,
-        null::bigint as source_file_id
-    from {{ ref('stg_insurer_rates') }} as r
+        null::bigint as source_file_id,
+        r.rate_flag
+    from {{ ref('int_insurer_rates_checked') }} as r
     join {{ ref('dim_services') }} as s using (service_key)
+    where r.rate_flag is distinct from 'not_positive'
+      and r.rate_flag is distinct from 'percentage_over_100'
 )
 
 select * from hospital

@@ -12,13 +12,16 @@ processes, one per CPU: parsing, not the download, is the limit.
 
 Resumable. Each file's status is a DynamoDB item (RUNS_TABLE), PK RUN#<insurer>#<month>,
 SK FILE#<name>: queued, done (with its stats) or failed (with the error). A rerun for the
-same month skips files that are done; failed and interrupted ones run again unless
---skip-failed. Each run adds a SUMMARY#<start time> item: files, hours and estimated Fargate cost.
+same month skips files that are done with the current hospital NPI list (warehouse/seeds/
+hospital_npis.csv, fingerprinted as npis_version: what a file keeps depends on it); failed
+and interrupted ones run again unless --skip-failed. Each run adds a SUMMARY#<start time>
+item: files, hours and estimated Fargate cost.
 
 Without RUNS_TABLE (a laptop), status is kept in memory only.
 """
 
 import argparse
+import hashlib
 import os
 import sys
 import time
@@ -120,6 +123,13 @@ def to_dynamo(value):
     return value
 
 
+def npis_version(npi_to_ccn: dict[int, str]) -> str:
+    """A fingerprint of the hospital NPI list. What a file keeps depends on it, so a file
+    done with an older list is run again."""
+    lines = "\n".join(f"{npi}:{ccn}" for npi, ccn in sorted(npi_to_ccn.items()))
+    return hashlib.sha256(lines.encode()).hexdigest()[:12]
+
+
 def process_file(url: str, insurer: str, month: str) -> dict:
     """Stream, normalize and upload one file (runs in a worker process)."""
     stats = run_file(url, insurer, month, hospital_npis())
@@ -150,8 +160,15 @@ def run(insurer: str, networks: list[str] | None, workers: int, skip_failed: boo
     files = all_in_network_files(load_toc(toc_url), networks)
     status = Status(insurer, month, status_table, table)
     previous = status.all()
-    skip = {"done"} | ({"failed"} if skip_failed else set())
-    todo = {n: u for n, u in files.items() if previous.get(n, {}).get("status") not in skip}
+    version = npis_version(hospital_npis())
+
+    def finished(name: str) -> bool:
+        item = previous.get(name, {})
+        if item.get("status") == "done":  # with the NPI list in use now
+            return item.get("npis_version") == version
+        return skip_failed and item.get("status") == "failed"
+
+    todo = {n: u for n, u in files.items() if not finished(n)}
     print(f"{insurer} {month}: {len(files)} files, {len(files) - len(todo)} already done "
           f"or skipped, {len(todo)} to run on {workers} workers")  # fmt: skip
     done = failed = 0
@@ -171,7 +188,7 @@ def run(insurer: str, networks: list[str] | None, workers: int, skip_failed: boo
                 print(f"FAILED {name}: {e}")
             else:
                 done += 1
-                status.file(name, "done", finished_at=now(), **stats)
+                status.file(name, "done", finished_at=now(), npis_version=version, **stats)
                 print(f"done {name}: {stats['rows']:,} rows, {stats['seconds']}s, "
                       f"{stats['mb_per_s']} MB/s")  # fmt: skip
     summary = summarize(started, time.perf_counter() - t0, files, status.all(), done, failed)
