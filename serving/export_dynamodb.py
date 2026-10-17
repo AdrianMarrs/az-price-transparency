@@ -11,7 +11,8 @@ chunk, so an interrupted export resumes where it stopped and a rerun with the sa
 writes nothing. Key design and costs: docs/03-cloud.md.
 
 Needs PRICES_TABLE (the table name; terraform -chdir=infra/main output prices_table) and
-AWS credentials (AWS_PROFILE locally).
+AWS credentials (AWS_PROFILE locally). With DATA_BUCKET set it also writes the service list
+the API searches (serving/services.json).
 """
 
 import argparse
@@ -27,6 +28,7 @@ import psycopg
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://pt:pt@localhost:5432/prices")
 MAX_ITEM_BYTES = 350_000  # DynamoDB's limit is 400 KB; dbt tests the same bound
 CHUNK = 500
+SERVICES_KEY = "serving/services.json"  # in the data bucket; the API loads it for search
 
 STATE_SQL = """
 CREATE TABLE IF NOT EXISTS {state} (
@@ -137,6 +139,33 @@ def export(table, conn: psycopg.Connection, source: str = "serving",
     return counts
 
 
+def service_id(service_key: str) -> str:
+    """The URL-safe id for a service: CPT/HCPCS:73721 -> cpt-hcpcs:73721."""
+    return service_key.replace("/", "-").lower()
+
+
+def services_list(conn: psycopg.Connection) -> list[dict]:
+    """Every service at least one hospital prices, for search (served as services.json)."""
+    rows = conn.execute("""
+        SELECT service_key, code, code_type, common_description, cms_shoppable_id,
+               cms_description, hospitals
+        FROM marts.dim_services WHERE hospitals > 0 ORDER BY service_key""").fetchall()
+    return [compact({"id": service_id(key), "key": key, "code": code, "code_type": code_type,
+                     "description": description, "cms_shoppable_id": shoppable,
+                     "cms_description": cms_description, "hospitals": hospitals})
+            for key, code, code_type, description, shoppable, cms_description, hospitals in rows]  # fmt: skip
+
+
+def export_services(conn: psycopg.Connection, bucket: str, client=None) -> int:
+    """Write services.json to s3://<bucket>/serving/; returns how many services."""
+    services = services_list(conn)
+    (client or boto3.client("s3")).put_object(
+        Bucket=bucket, Key=SERVICES_KEY, ContentType="application/json",
+        Body=json.dumps(services, separators=(",", ":")).encode(),
+    )  # fmt: skip
+    return len(services)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--dry-run", action="store_true", help="count what would change")
@@ -153,6 +182,12 @@ def main() -> None:
     verb = "would put" if args.dry_run else "put"
     print(f"{verb} {counts['put']:,} items ({counts['bytes'] / 1e6:,.0f} MB), "
           f"deleted {counts['deleted']:,}, in {seconds:,.0f}s")  # fmt: skip
+    bucket = os.environ.get("DATA_BUCKET")
+    if bucket and not args.dry_run:
+        with psycopg.connect(DATABASE_URL, autocommit=True) as conn:
+            print(
+                f"wrote {export_services(conn, bucket):,} services to s3://{bucket}/{SERVICES_KEY}"
+            )
 
 
 if __name__ == "__main__":
