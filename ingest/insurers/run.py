@@ -11,7 +11,7 @@ month), then streams each in-network file (ingest.insurers.tic), normalizes it t
 processes, one per CPU: parsing, not the download, is the limit.
 
 Resumable. Each file's status is a DynamoDB item (RUNS_TABLE), PK RUN#<insurer>#<month>,
-SK FILE#<name>: running, done (with its stats) or failed (with the error). A rerun for the
+SK FILE#<name>: queued, done (with its stats) or failed (with the error). A rerun for the
 same month skips files that are done; failed and interrupted ones run again unless
 --skip-failed. A SUMMARY item records the run's files, hours and estimated Fargate cost.
 
@@ -135,7 +135,7 @@ def process_file(url: str, insurer: str, month: str) -> dict:
         raw.unlink(missing_ok=True)
         dest.unlink(missing_ok=True)
     keep = ("references", "kept_groups", "codes", "kept_codes", "compressed", "refs_first",
-            "pass1_compressed", "seconds", "mb_per_s", "s3_uri")  # fmt: skip
+            "pass1_compressed", "inline_group_rates", "seconds", "mb_per_s", "s3_uri")  # fmt: skip
     return {k: stats[k] for k in keep if k in stats} | {
         "rows": df.height,
         "hospitals": df["ccn"].n_unique(),
@@ -158,7 +158,7 @@ def run(insurer: str, networks: list[str] | None, workers: int, skip_failed: boo
     with ProcessPoolExecutor(max_workers=workers) as pool:
         futures = {}
         for name, url in todo.items():
-            status.file(name, "running", started_at=now())
+            status.file(name, "queued", queued_at=now())
             futures[pool.submit(process_file, url, insurer, month)] = name
         for future in as_completed(futures):
             name = futures[future]

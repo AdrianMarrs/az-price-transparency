@@ -61,14 +61,26 @@ def arizona_groups(reference: dict, npi_to_ccn: dict[int, str]) -> set[str]:
     return ccns
 
 
-def keep_rates(item: dict, kept: dict[int, set[str]]) -> dict | None:
-    """The billing code with only the rates that reference a kept group, tagged with CCNs."""
+def keep_rates(item: dict, kept: dict[int, set[str]], npi_to_ccn: dict[int, str] | None = None,
+               stats: dict | None = None) -> dict | None:  # fmt: skip
+    """The billing code with only the rates for kept providers, tagged with CCNs.
+
+    A rate names its providers by reference to provider_references (what Cigna does), or
+    lists them inline in its own provider_groups, which the schema also allows; inline
+    groups are matched against npi_to_ccn and counted in stats["inline_group_rates"]."""
     rates = []
     for rate in item.get("negotiated_rates", []):
         refs = [r for r in rate.get("provider_references", []) if r in kept]
-        if refs:
-            ccns = sorted(set().union(*(kept[r] for r in refs)))
-            rates.append({"ccns": ccns, "provider_references": refs,
+        ccns = set().union(*(kept[r] for r in refs))
+        kept_rate = {"provider_references": refs} if refs else {}
+        if "provider_groups" in rate:
+            if stats is not None:
+                stats["inline_group_rates"] = stats.get("inline_group_rates", 0) + 1
+            if inline := arizona_groups(rate, npi_to_ccn or {}):
+                ccns |= inline
+                kept_rate["provider_groups"] = rate["provider_groups"]
+        if ccns:
+            rates.append({"ccns": sorted(ccns), **kept_rate,
                           "negotiated_prices": rate.get("negotiated_prices", [])})  # fmt: skip
     if not rates:
         return None
@@ -114,7 +126,9 @@ REFS_KEY, RATES_KEY = b'"provider_references"', b'"in_network"'
 def stream_file(source: str, npi_to_ccn: dict[int, str], client=None, stats: dict | None = None):
     """Yield kept billing codes from one in-network file (see the module docstring)."""
     stats = stats if stats is not None else {}
-    stats.update(references=0, kept_groups=0, codes=0, kept_codes=0, compressed=0)
+    stats.update(
+        references=0, kept_groups=0, codes=0, kept_codes=0, compressed=0, inline_group_rates=0
+    )
 
     def counted(chunks):
         for chunk in chunks:
@@ -136,12 +150,13 @@ def stream_file(source: str, npi_to_ccn: dict[int, str], client=None, stats: dic
     stats["refs_first"] = reader.cut
     stats["pass1_compressed"] = stats["compressed"]
 
-    # Pass 2: the rates, keeping those that reference a kept group.
+    # Pass 2: the rates, keeping those for a kept group. Read even when pass 1 kept no
+    # groups: a rate can list its providers inline instead of by reference.
     reader = GunzipReader(counted(byte_chunks(source, client)))
     try:
         for item in ijson.items(reader, "in_network.item", use_float=True, buf_size=JSON_CHUNK):
             stats["codes"] += 1
-            if (kept_item := keep_rates(item, kept)) is not None:
+            if (kept_item := keep_rates(item, kept, npi_to_ccn, stats)) is not None:
                 stats["kept_codes"] += 1
                 yield kept_item
     finally:

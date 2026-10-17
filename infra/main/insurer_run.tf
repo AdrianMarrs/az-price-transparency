@@ -39,7 +39,7 @@ resource "aws_ecr_lifecycle_policy" "insurer" {
 
 # --- Run status --------------------------------------------------------------------------
 
-#   PK RUN#<insurer>#<month>   SK FILE#<file name>   running | done (stats) | failed (error)
+#   PK RUN#<insurer>#<month>   SK FILE#<file name>   queued | done (stats) | failed (error)
 #   PK RUN#<insurer>#<month>   SK SUMMARY            files, hours, estimated cost
 resource "aws_dynamodb_table" "runs" {
   name         = "${var.project}-runs"

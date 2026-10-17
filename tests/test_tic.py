@@ -65,6 +65,36 @@ def test_keep_rates_drops_other_providers_and_tags_ccns():
     assert keep_rates(IN_NETWORK[1], {1: {"030006"}}) is None
 
 
+def test_keep_rates_matches_inline_provider_groups():
+    item = {"billing_code": "73721", "negotiated_rates": [
+        {"provider_groups": [{"npi": [2222222222], "tin": {"type": "ein", "value": "3"}}],
+         "negotiated_prices": [{"negotiated_type": "negotiated", "negotiated_rate": 500.0}]},
+        {"provider_groups": [{"npi": [8888888888], "tin": {"type": "ein", "value": "2"}}],
+         "negotiated_prices": [{"negotiated_type": "negotiated", "negotiated_rate": 1.0}]},
+        {"provider_references": [1], "negotiated_prices": [
+            {"negotiated_type": "negotiated", "negotiated_rate": 400.0}]},
+    ]}  # fmt: skip
+    stats = {}
+    kept = keep_rates(item, {1: {"030006"}}, NPIS, stats)
+    assert [(r["ccns"], r["negotiated_prices"][0]["negotiated_rate"]) for r in kept["negotiated_rates"]] == [
+        (["030011"], 500.0), (["030006"], 400.0)]  # fmt: skip
+    assert "provider_groups" in kept["negotiated_rates"][0]
+    assert stats["inline_group_rates"] == 2
+
+
+def test_inline_groups_are_found_when_no_reference_is_kept(tmp_path):
+    doc = {"reporting_entity_name": "Test", "provider_references": REFS[1:2], "in_network": [
+        {"billing_code": "470", "billing_code_type": "MS-DRG", "negotiated_rates": [
+            {"provider_groups": [{"npi": [1111111111], "tin": {"type": "ein", "value": "1"}}],
+             "negotiated_prices": [{"negotiated_type": "negotiated", "negotiated_rate": 21000.0}]}]}]}  # fmt: skip
+    path = tmp_path / "inline.json.gz"
+    path.write_bytes(gz(doc))
+    stats = {}
+    items = list(stream_file(str(path), NPIS, stats=stats))
+    assert stats["kept_groups"] == 0 and stats["inline_group_rates"] == 1
+    assert items[0]["negotiated_rates"][0]["ccns"] == ["030006"]
+
+
 @pytest.mark.parametrize("chunk", [7, 1 << 20])  # 7 bytes: chunk boundaries fall everywhere
 def test_stream_file_keeps_arizona_rates(tmp_path, monkeypatch, chunk):
     monkeypatch.setattr(tic, "CHUNK", chunk)

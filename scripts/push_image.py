@@ -7,9 +7,15 @@ Tags it with the current git commit and `latest`; the task definition runs `late
 Needs Docker (with buildx) and an AWS login (AWS_PROFILE).
 """
 
-import base64
+import json
+import os
+import shutil
 import subprocess
 import sys
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
+from pathlib import Path
 
 import boto3
 
@@ -27,6 +33,30 @@ def region(repository: str) -> str:
     return registry(repository).split(".")[3]
 
 
+@contextmanager
+def throwaway_docker_config(registry_host: str, token: str) -> Iterator[str]:
+    """A copy of the user's Docker config that holds the ECR token itself, deleted after.
+
+    ECR's token (base64 "AWS:<password>", valid 12 hours) is too long for the Windows
+    Credential Manager that `docker login` uses ("The stub received bad data"). The copy
+    keeps the current context and builders, and points at the user's CLI plugins (buildx),
+    but drops the credential store so the token is read from the file."""
+    home = Path(os.environ.get("DOCKER_CONFIG", Path.home() / ".docker"))
+    settings = (
+        json.loads((home / "config.json").read_text()) if (home / "config.json").exists() else {}
+    )
+    settings.pop("credsStore", None)
+    settings.pop("credHelpers", None)
+    settings["auths"] = {registry_host: {"auth": token}}
+    settings["cliPluginsExtraDirs"] = [str(home / "cli-plugins")]
+    with tempfile.TemporaryDirectory() as config:
+        for small in ("contexts", "buildx"):
+            if (home / small).is_dir():
+                shutil.copytree(home / small, Path(config) / small)
+        (Path(config) / "config.json").write_text(json.dumps(settings))
+        yield config
+
+
 def main() -> None:
     if len(sys.argv) != 2:
         sys.exit(__doc__)
@@ -36,14 +66,12 @@ def main() -> None:
         commit += "-dirty"
     ecr = boto3.client("ecr", region_name=region(repository))
     token = ecr.get_authorization_token()["authorizationData"][0]["authorizationToken"]
-    user, password = base64.b64decode(token).decode().split(":", 1)
-    subprocess.run(["docker", "login", "--username", user, "--password-stdin", registry(repository)],
-                   input=password, text=True, check=True)  # fmt: skip
     build = ["docker", "buildx", "build", "--platform", "linux/arm64",
              "-f", "docker/insurer.Dockerfile", "--push", "--provenance=false"]  # fmt: skip
     for tag in tags(repository, commit):
         build += ["-t", tag]
-    subprocess.run([*build, "."], check=True)
+    with throwaway_docker_config(registry(repository), token) as config:
+        subprocess.run([*build, "."], check=True, env=os.environ | {"DOCKER_CONFIG": config})
     print("pushed", ", ".join(tags(repository, commit)))
 
 
