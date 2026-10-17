@@ -75,8 +75,21 @@ export type ShoppableSummary = {
   plans: number;
 };
 
+// The API is throttled (10 requests a second, bursts of 20) and a build pre-renders 170
+// pages from it, so busy answers are retried after a growing pause. GETs are safe to repeat.
+const BUSY = new Set([429, 502, 503, 504]);
+export const RETRY_DELAYS_MS = [500, 1000, 2000, 4000, 8000];
+
+export async function fetchWithRetry(url: string, signal?: AbortSignal, delays = RETRY_DELAYS_MS) {
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetch(url, { signal });
+    if (!BUSY.has(response.status) || attempt >= delays.length) return response;
+    await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+  }
+}
+
 async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(`${BASE}${path}`, { signal });
+  const response = await fetchWithRetry(`${BASE}${path}`, signal);
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.error ?? `HTTP ${response.status}`);

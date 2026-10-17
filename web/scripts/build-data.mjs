@@ -49,13 +49,18 @@ export function parseCsv(text) {
 export const serviceSlug = (codeType, code) =>
   `${codeType === "MS-DRG" ? "drg" : "cpt"}-${code.toLowerCase()}`;
 
+// The API is throttled (10 requests a second); a busy answer is retried after a growing pause.
+const BUSY = new Set([429, 502, 503, 504]);
+
 async function profile(ccn) {
   for (let attempt = 1; ; attempt++) {
     const response = await fetch(`${API}/providers/${ccn}`);
     if (response.ok) return response.json();
     if (response.status === 404) return null;
-    if (attempt === 3) throw new Error(`/providers/${ccn}: HTTP ${response.status}`);
-    await new Promise((r) => setTimeout(r, 1000 * attempt));
+    if (!BUSY.has(response.status) || attempt === 6) {
+      throw new Error(`/providers/${ccn}: HTTP ${response.status}`);
+    }
+    await new Promise((r) => setTimeout(r, 500 * 2 ** attempt));
   }
 }
 
@@ -63,8 +68,8 @@ async function main() {
   const seed = parseCsv(await readFile(new URL("hospitals.csv", SEEDS), "utf8"))
     .filter((h) => h.federally_run !== "true");
   const hospitals = [];
-  for (let i = 0; i < seed.length; i += 8) { // a few at a time: polite to the API
-    const batch = await Promise.all(seed.slice(i, i + 8).map(async (h) => {
+  for (let i = 0; i < seed.length; i += 4) { // a few at a time: under the API's throttle
+    const batch = await Promise.all(seed.slice(i, i + 4).map(async (h) => {
       const p = (await profile(h.ccn)) ?? {};
       return {
         ccn: h.ccn,
