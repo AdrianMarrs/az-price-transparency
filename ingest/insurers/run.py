@@ -13,7 +13,7 @@ processes, one per CPU: parsing, not the download, is the limit.
 Resumable. Each file's status is a DynamoDB item (RUNS_TABLE), PK RUN#<insurer>#<month>,
 SK FILE#<name>: queued, done (with its stats) or failed (with the error). A rerun for the
 same month skips files that are done; failed and interrupted ones run again unless
---skip-failed. A SUMMARY item records the run's files, hours and estimated Fargate cost.
+--skip-failed. Each run adds a SUMMARY#<start time> item: files, hours and estimated Fargate cost.
 
 Without RUNS_TABLE (a laptop), status is kept in memory only.
 """
@@ -36,7 +36,7 @@ from ingest.storage import upload
 
 POINTERS = {"cigna": "https://www.cigna.com/static/mrf/latest.json"}
 
-# Fargate, us-east-2, Linux/ARM (per hour). Used for the estimate in the SUMMARY item; the
+# Fargate, us-east-2, Linux/ARM (per hour). Used for the estimate in the SUMMARY items; the
 # actual charge is checked against Cost Explorer afterwards.
 FARGATE_VCPU_HOUR = 0.03238
 FARGATE_GB_HOUR = 0.00356
@@ -175,7 +175,7 @@ def run(insurer: str, networks: list[str] | None, workers: int, skip_failed: boo
                 print(f"done {name}: {stats['rows']:,} rows, {stats['seconds']}s, "
                       f"{stats['mb_per_s']} MB/s")  # fmt: skip
     summary = summarize(started, time.perf_counter() - t0, files, status.all(), done, failed)
-    status.put("SUMMARY", **summary)
+    status.put(f"SUMMARY#{started}", **summary)  # one per run: a resume keeps the first
     return summary
 
 

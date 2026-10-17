@@ -16,7 +16,7 @@ variable "alert_email" {
 }
 
 variable "insurer_schedule_enabled" {
-  description = "Run the insurer pipeline monthly. Off until a manual run has been checked."
+  description = "Run the insurer pipeline monthly (checked with a manual run, October 2026)."
   type        = bool
-  default     = false
+  default     = true
 }

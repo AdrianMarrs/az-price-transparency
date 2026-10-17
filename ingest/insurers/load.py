@@ -1,10 +1,11 @@
 """Load normalized insurer rates into Postgres with COPY.
 
 Usage:
-    uv run python -m ingest.insurers.load [--insurer cigna] --month 2026-10
+    uv run python -m ingest.insurers.load [--insurer cigna] --month 2026-10 [--from-bucket]
 
 Reads data/insurers/parquet/insurer=<name>/month=<m>/*.parquet (written by
-ingest.insurers.normalize) into raw.insurer_rates. Each network is replaced in one
+ingest.insurers.normalize, or by the monthly cloud run: --from-bucket downloads that month
+from the data bucket first) into raw.insurer_rates. Each network is replaced in one
 transaction, so a reload never leaves half a network behind.
 """
 
@@ -19,6 +20,7 @@ from psycopg import sql
 
 from ingest.hospitals.load import DATABASE_URL
 from ingest.insurers.normalize import PARQUET_DIR, SCHEMA
+from ingest.storage import download_dir
 
 COLUMNS = list(SCHEMA)
 
@@ -81,17 +83,28 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--insurer", default="cigna")
     parser.add_argument("--month", required=True)
+    parser.add_argument(
+        "--from-bucket", action="store_true", help="download from DATA_BUCKET first"
+    )
     args = parser.parse_args()
     src = PARQUET_DIR / f"insurer={args.insurer}" / f"month={args.month}"
+    if args.from_bucket:
+        print(f"downloaded {len(download_dir(src))} files to {src}")
     paths = sorted(Path(src).glob("*.parquet"))
     if not paths:
         raise SystemExit(f"no Parquet files in {src}")
+    total = empty = 0
     with psycopg.connect(DATABASE_URL) as conn:
         create_table(conn)
         for path in paths:
             started = time.perf_counter()
             rows = load_network(conn, pl.read_parquet(path))
-            print(f"{path.stem:<45} {rows:>10,} rows  {time.perf_counter() - started:5.1f}s")
+            total += rows
+            if rows:
+                print(f"{path.stem:<50} {rows:>10,} rows  {time.perf_counter() - started:5.1f}s")
+            else:
+                empty += 1
+    print(f"{total:,} rows from {len(paths) - empty} networks ({empty} with no Arizona hospitals)")
 
 
 if __name__ == "__main__":

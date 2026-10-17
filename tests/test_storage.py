@@ -2,7 +2,7 @@ from pathlib import Path
 
 from botocore.exceptions import ClientError
 
-from ingest.storage import s3_key, upload
+from ingest.storage import download_dir, s3_key, upload
 
 
 class FakeS3:
@@ -41,3 +41,35 @@ def test_upload_returns_the_s3_uri(monkeypatch):
 def test_a_failed_upload_is_reported_not_raised(monkeypatch):
     monkeypatch.setenv("DATA_BUCKET", "bucket")
     assert upload(Path("data/parsed/030006.parquet"), FakeS3(fail=True)) is None
+
+
+class FakeListingS3:
+    """list_objects_v2 pages (one object per page) and download_file over a dict."""
+
+    def __init__(self, objects: dict[str, bytes]):
+        self.objects = objects
+
+    def get_paginator(self, name):
+        assert name == "list_objects_v2"
+        return self
+
+    def paginate(self, Bucket, Prefix):
+        for key in sorted(k for k in self.objects if k.startswith(Prefix)):
+            yield {"Contents": [{"Key": key}]}
+
+    def download_file(self, bucket, key, filename):
+        Path(filename).write_bytes(self.objects[key])
+
+
+def test_download_dir_mirrors_a_bucket_prefix(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("DATA_BUCKET", "bucket")
+    s3 = FakeListingS3({
+        "parquet/insurer=cigna/month=2026-10/arizona-hmo.parquet": b"a",
+        "parquet/insurer=cigna/month=2026-10/national-ppo.parquet": b"b",
+        "parquet/insurer=cigna/month=2026-11/arizona-hmo.parquet": b"other month",
+    })  # fmt: skip
+    local = Path("data/insurers/parquet/insurer=cigna/month=2026-10")
+    paths = download_dir(local, s3)
+    assert sorted(p.name for p in paths) == ["arizona-hmo.parquet", "national-ppo.parquet"]
+    assert (local / "national-ppo.parquet").read_bytes() == b"b"

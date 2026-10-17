@@ -69,7 +69,7 @@ def test_status_pages_through_query_results():
     status = run.Status("cigna", "2026-10", table=table)
     for i in range(5):
         status.file(f"f{i}", "done")
-    status.put("SUMMARY", files=5)
+    status.put("SUMMARY#2026-10-17T19:13:42+00:00", files=5)
     assert sorted(status.all()) == [f"f{i}" for i in range(5)]
 
 
@@ -92,7 +92,7 @@ def runner(monkeypatch, tmp_path):
         return run.run("cigna", None, 1, skip_failed, table=table)
 
     def statuses():
-        return {sk: i["status"] for (_, sk), i in table.items.items() if sk != "SUMMARY"}
+        return {sk: i["status"] for (_, sk), i in table.items.items() if sk.startswith("FILE#")}
 
     return go, statuses, table
 

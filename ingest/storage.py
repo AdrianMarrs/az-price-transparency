@@ -42,3 +42,21 @@ def upload(path: Path, client=None) -> str | None:
         print(f"S3 upload failed for {path}: {e}")
         return None
     return f"s3://{bucket}/{key}"
+
+
+def download_dir(local_dir: Path, client=None) -> list[Path]:
+    """Copy every object under local_dir's bucket prefix into local_dir (the reverse of
+    upload), e.g. a month of insurer Parquet written by the cloud run. Returns the paths."""
+    bucket = os.environ.get("DATA_BUCKET")
+    if not bucket:
+        raise RuntimeError("DATA_BUCKET is not set")
+    client = client or boto3.client("s3")
+    prefix = s3_key(Path(local_dir) / "x").removesuffix("x")
+    paths = []
+    for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            dest = Path(local_dir) / obj["Key"].removeprefix(prefix)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            client.download_file(bucket, obj["Key"], str(dest))
+            paths.append(dest)
+    return paths
