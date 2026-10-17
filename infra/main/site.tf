@@ -101,6 +101,16 @@ resource "aws_cloudfront_response_headers_policy" "site" {
   }
 }
 
+# Pre-rendered pages are folders with an index.html (web/react-router.config.ts); this maps
+# their URLs to those files. Free tier: 2 million invocations a month.
+resource "aws_cloudfront_function" "site_router" {
+  name    = "${var.project}-site-router"
+  runtime = "cloudfront-js-2.0"
+  comment = "Map page URLs to pre-rendered index.html files"
+  publish = true
+  code    = file("${path.module}/site_router.js")
+}
+
 resource "aws_cloudfront_distribution" "site" {
   enabled             = true
   comment             = "${var.project} site"
@@ -122,6 +132,27 @@ resource "aws_cloudfront_distribution" "site" {
     cache_policy_id            = "658327ea-f89d-4fab-a63d-7e88639e58f6" # AWS managed: CachingOptimized
     response_headers_policy_id = aws_cloudfront_response_headers_policy.site.id
     compress                   = true
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.site_router.arn
+    }
+  }
+
+  # A page that wasn't pre-rendered: S3 says 403 (no such object; the bucket isn't listable),
+  # and the app shell renders the page in the browser instead. A path that really doesn't
+  # exist gets the site's own 404 page from the app.
+  custom_error_response {
+    error_code            = 403
+    response_code         = 200
+    response_page_path    = "/__spa-fallback.html"
+    error_caching_min_ttl = 60
+  }
+  custom_error_response {
+    error_code            = 404
+    response_code         = 200
+    response_page_path    = "/__spa-fallback.html"
+    error_caching_min_ttl = 60
   }
 
   restrictions {
@@ -136,7 +167,7 @@ resource "aws_cloudfront_distribution" "site" {
 }
 
 output "site_bucket" {
-  description = "Where scripts/deploy_site.py uploads web/dist."
+  description = "Where scripts/deploy_site.py uploads web/build/client."
   value       = aws_s3_bucket.site.bucket
 }
 
