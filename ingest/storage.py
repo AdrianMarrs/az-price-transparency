@@ -5,6 +5,8 @@ durable copy that the cloud pipeline will read. Keys mirror the local layout:
 
     data/raw/<yyyy-mm-dd>/<file>.gz  ->  raw/<yyyy-mm-dd>/<file>.gz   (expires after 7 days)
     data/parsed/<ccn>.parquet        ->  parquet/<ccn>.parquet
+    data/insurers/raw/insurer=<name>/month=<m>/...      ->  raw/insurer=<name>/month=<m>/...
+    data/insurers/parquet/insurer=<name>/month=<m>/...  ->  parquet/insurer=<name>/month=<m>/...
 
 Without DATA_BUCKET (tests, CI, a laptop with no AWS login) nothing is uploaded. An upload
 that fails is reported and returns None; it never fails the download or parse itself.
@@ -23,6 +25,8 @@ def s3_key(path: Path) -> str:
     """The bucket key for a file under data/raw/ or data/parsed/."""
     parts = Path(path).as_posix().split("/")
     i = parts.index("data")
+    if parts[i + 1] == "insurers":  # already laid out as raw/... or parquet/...
+        return "/".join(parts[i + 2 :])
     return "/".join([PREFIXES[parts[i + 1]], *parts[i + 2 :]])
 
 

@@ -18,6 +18,8 @@ class FakeS3:
 def test_keys_mirror_the_local_layout():
     assert s3_key(Path("data/raw/2026-10-16/030006_x.csv.gz")) == "raw/2026-10-16/030006_x.csv.gz"
     assert s3_key(Path("data/parsed/030006.parquet")) == "parquet/030006.parquet"
+    insurer = "data/insurers/raw/insurer=cigna/month=2026-10/x.jsonl.gz"
+    assert s3_key(Path(insurer)) == "raw/insurer=cigna/month=2026-10/x.jsonl.gz"
 
 
 def test_nothing_is_uploaded_without_a_bucket(monkeypatch):
