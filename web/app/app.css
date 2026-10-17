@@ -1,0 +1,106 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+
+/* Dark mode follows the visitor's system setting. */
+@custom-variant dark (@media (prefers-color-scheme: dark));
+
+/* Colors are shadcn/ui's token names, so its components pick them up. A deep teal accent on
+   neutral grays; green, amber and red only carry meaning (pass, partial, fail). */
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.985 0.002 247);
+  --foreground: oklch(0.2 0.02 256);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--foreground);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(0.46 0.09 196);
+  --primary-foreground: oklch(0.985 0.002 196);
+  --secondary: oklch(0.955 0.012 196);
+  --secondary-foreground: oklch(0.3 0.05 196);
+  --muted: oklch(0.965 0.004 247);
+  --muted-foreground: oklch(0.49 0.02 256);
+  --accent: oklch(0.955 0.012 196);
+  --accent-foreground: oklch(0.3 0.05 196);
+  --destructive: oklch(0.55 0.2 27);
+  --success: oklch(0.52 0.12 155);
+  --warning: oklch(0.62 0.14 65);
+  --border: oklch(0.915 0.006 247);
+  --input: oklch(0.88 0.008 247);
+  --ring: oklch(0.46 0.09 196);
+  --hero: oklch(0.27 0.05 220);
+  --hero-foreground: oklch(0.97 0.01 200);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.17 0.012 256);
+    --foreground: oklch(0.95 0.005 247);
+    --card: oklch(0.21 0.014 256);
+    --card-foreground: var(--foreground);
+    --popover: oklch(0.21 0.014 256);
+    --popover-foreground: var(--foreground);
+    --primary: oklch(0.74 0.11 192);
+    --primary-foreground: oklch(0.2 0.03 200);
+    --secondary: oklch(0.27 0.02 220);
+    --secondary-foreground: oklch(0.92 0.02 196);
+    --muted: oklch(0.25 0.012 256);
+    --muted-foreground: oklch(0.72 0.015 256);
+    --accent: oklch(0.27 0.02 220);
+    --accent-foreground: oklch(0.92 0.02 196);
+    --destructive: oklch(0.68 0.18 25);
+    --success: oklch(0.72 0.13 155);
+    --warning: oklch(0.78 0.13 75);
+    --border: oklch(0.3 0.012 256);
+    --input: oklch(0.34 0.012 256);
+    --ring: oklch(0.74 0.11 192);
+    --hero: oklch(0.22 0.04 220);
+    --hero-foreground: oklch(0.96 0.01 200);
+  }
+}
+
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-hero: var(--hero);
+  --color-hero-foreground: var(--hero-foreground);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    color-scheme: light dark;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01"; /* Inter's straight-sided 1 and open digits */
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}

@@ -1,0 +1,668 @@
+[
+ {
+  "slug": "cpt-90832",
+  "id": "cpt-hcpcs:90832",
+  "code": "90832",
+  "code_type": "CPT/HCPCS",
+  "category": "Evaluation & Management",
+  "description": "Psychotherapy, 30 min",
+  "cms_shoppable_id": 1
+ },
+ {
+  "slug": "cpt-90834",
+  "id": "cpt-hcpcs:90834",
+  "code": "90834",
+  "code_type": "CPT/HCPCS",
+  "category": "Evaluation & Management",
+  "description": "Psychotherapy, 45 min",
+  "cms_shoppable_id": 2
+ },
+ {
+  "slug": "cpt-90837",
+  "id": "cpt-hcpcs:90837",
+  "code": "90837",
+  "code_type": "CPT/HCPCS",
+  "category": "Evaluation & Management",
+  "description": "Psychotherapy, 60 min",
+  "cms_shoppable_id": 3
+ },
+ {
+  "slug": "cpt-90846",
+  "id": "cpt-hcpcs:90846",
+  "code": "90846",
+  "code_type": "CPT/HCPCS",
+  "category": "Evaluation & Management",
+  "description": "Family psychotherapy, not including patient, 50 min",
+  "cms_shoppable_id": 4
+ },
+ {
+  "slug": "cpt-90847",
+  "id": "cpt-hcpcs:90847",
+  "code": "90847",
+  "code_type": "CPT/HCPCS",
+  "category": "Evaluation & Management",
+  "description": "Family psychotherapy, including patient, 50 min",
+  "cms_shoppable_id": 5
+ },
+ {
+  "slug": "cpt-90853",
+  "id": "cpt-hcpcs:90853",
+  "code": "90853",
+  "code_type": "CPT/HCPCS",
+  "category": "Evaluation & Management",
+  "description": "Group psychotherapy",
+  "cms_shoppable_id": 6
+ },
+ {
+  "slug": "cpt-99203",
+  "id": "cpt-hcpcs:99203",
+  "code": "99203",
+  "code_type": "CPT/HCPCS",
+  "category": "Evaluation & Management",
+  "description": "New patient office or other outpatient visit, typically 30 min",
+  "cms_shoppable_id": 7
+ },
+ {
+  "slug": "cpt-99204",
+  "id": "cpt-hcpcs:99204",
+  "code": "99204",
+  "code_type": "CPT/HCPCS",
+  "category": "Evaluation & Management",
+  "description": "New patient office or other outpatient visit, typically 45 min",
+  "cms_shoppable_id": 8
+ },
+ {
+  "slug": "cpt-99205",
+  "id": "cpt-hcpcs:99205",
+  "code": "99205",
+  "code_type": "CPT/HCPCS",
+  "category": "Evaluation & Management",
+  "description": "New patient office or other outpatient visit, typically 60 min",
+  "cms_shoppable_id": 9
+ },
+ {
+  "slug": "cpt-99243",
+  "id": "cpt-hcpcs:99243",
+  "code": "99243",
+  "code_type": "CPT/HCPCS",
+  "category": "Evaluation & Management",
+  "description": "Patient office consultation, typically 40 min",
+  "cms_shoppable_id": 10
+ },
+ {
+  "slug": "cpt-99244",
+  "id": "cpt-hcpcs:99244",
+  "code": "99244",
+  "code_type": "CPT/HCPCS",
+  "category": "Evaluation & Management",
+  "description": "Patient office consultation, typically 60 min",
+  "cms_shoppable_id": 11
+ },
+ {
+  "slug": "cpt-99385",
+  "id": "cpt-hcpcs:99385",
+  "code": "99385",
+  "code_type": "CPT/HCPCS",
+  "category": "Evaluation & Management",
+  "description": "Initial new patient preventive medicine evaluation (18-39 years)",
+  "cms_shoppable_id": 12
+ },
+ {
+  "slug": "cpt-99386",
+  "id": "cpt-hcpcs:99386",
+  "code": "99386",
+  "code_type": "CPT/HCPCS",
+  "category": "Evaluation & Management",
+  "description": "Initial new patient preventive medicine evaluation (40-64 years)",
+  "cms_shoppable_id": 13
+ },
+ {
+  "slug": "cpt-80048",
+  "id": "cpt-hcpcs:80048",
+  "code": "80048",
+  "code_type": "CPT/HCPCS",
+  "category": "Laboratory & Pathology",
+  "description": "Basic metabolic panel",
+  "cms_shoppable_id": 14
+ },
+ {
+  "slug": "cpt-80053",
+  "id": "cpt-hcpcs:80053",
+  "code": "80053",
+  "code_type": "CPT/HCPCS",
+  "category": "Laboratory & Pathology",
+  "description": "Blood test, comprehensive group of blood chemicals",
+  "cms_shoppable_id": 15
+ },
+ {
+  "slug": "cpt-80055",
+  "id": "cpt-hcpcs:80055",
+  "code": "80055",
+  "code_type": "CPT/HCPCS",
+  "category": "Laboratory & Pathology",
+  "description": "Obstetric blood test panel",
+  "cms_shoppable_id": 16
+ },
+ {
+  "slug": "cpt-80061",
+  "id": "cpt-hcpcs:80061",
+  "code": "80061",
+  "code_type": "CPT/HCPCS",
+  "category": "Laboratory & Pathology",
+  "description": "Blood test, lipids (cholesterol and triglycerides)",
+  "cms_shoppable_id": 17
+ },
+ {
+  "slug": "cpt-80069",
+  "id": "cpt-hcpcs:80069",
+  "code": "80069",
+  "code_type": "CPT/HCPCS",
+  "category": "Laboratory & Pathology",
+  "description": "Kidney function panel test",
+  "cms_shoppable_id": 18
+ },
+ {
+  "slug": "cpt-80076",
+  "id": "cpt-hcpcs:80076",
+  "code": "80076",
+  "code_type": "CPT/HCPCS",
+  "category": "Laboratory & Pathology",
+  "description": "Liver function blood test panel",
+  "cms_shoppable_id": 19
+ },
+ {
+  "slug": "cpt-81000",
+  "id": "cpt-hcpcs:81000",
+  "code": "81000",
+  "code_type": "CPT/HCPCS",
+  "category": "Laboratory & Pathology",
+  "description": "Manual urinalysis test with examination using microscope",
+  "cms_shoppable_id": 20
+ },
+ {
+  "slug": "cpt-81001",
+  "id": "cpt-hcpcs:81001",
+  "code": "81001",
+  "code_type": "CPT/HCPCS",
+  "category": "Laboratory & Pathology",
+  "description": "Manual urinalysis test with examination using microscope",
+  "cms_shoppable_id": 20
+ },
+ {
+  "slug": "cpt-81002",
+  "id": "cpt-hcpcs:81002",
+  "code": "81002",
+  "code_type": "CPT/HCPCS",
+  "category": "Laboratory & Pathology",
+  "description": "Automated urinalysis test",
+  "cms_shoppable_id": 21
+ },
+ {
+  "slug": "cpt-81003",
+  "id": "cpt-hcpcs:81003",
+  "code": "81003",
+  "code_type": "CPT/HCPCS",
+  "category": "Laboratory & Pathology",
+  "description": "Automated urinalysis test",
+  "cms_shoppable_id": 21
+ },
+ {
+  "slug": "cpt-84153",
+  "id": "cpt-hcpcs:84153",
+  "code": "84153",
+  "code_type": "CPT/HCPCS",
+  "category": "Laboratory & Pathology",
+  "description": "PSA (prostate specific antigen)",
+  "cms_shoppable_id": 22
+ },
+ {
+  "slug": "cpt-84154",
+  "id": "cpt-hcpcs:84154",
+  "code": "84154",
+  "code_type": "CPT/HCPCS",
+  "category": "Laboratory & Pathology",
+  "description": "PSA (prostate specific antigen)",
+  "cms_shoppable_id": 22
+ },
+ {
+  "slug": "cpt-84443",
+  "id": "cpt-hcpcs:84443",
+  "code": "84443",
+  "code_type": "CPT/HCPCS",
+  "category": "Laboratory & Pathology",
+  "description": "Blood test, thyroid stimulating hormone (TSH)",
+  "cms_shoppable_id": 23
+ },
+ {
+  "slug": "cpt-85025",
+  "id": "cpt-hcpcs:85025",
+  "code": "85025",
+  "code_type": "CPT/HCPCS",
+  "category": "Laboratory & Pathology",
+  "description": "Complete blood cell count, with differential white blood cells, automated",
+  "cms_shoppable_id": 24
+ },
+ {
+  "slug": "cpt-85027",
+  "id": "cpt-hcpcs:85027",
+  "code": "85027",
+  "code_type": "CPT/HCPCS",
+  "category": "Laboratory & Pathology",
+  "description": "Complete blood count, automated",
+  "cms_shoppable_id": 25
+ },
+ {
+  "slug": "cpt-85610",
+  "id": "cpt-hcpcs:85610",
+  "code": "85610",
+  "code_type": "CPT/HCPCS",
+  "category": "Laboratory & Pathology",
+  "description": "Blood test, clotting time",
+  "cms_shoppable_id": 26
+ },
+ {
+  "slug": "cpt-85730",
+  "id": "cpt-hcpcs:85730",
+  "code": "85730",
+  "code_type": "CPT/HCPCS",
+  "category": "Laboratory & Pathology",
+  "description": "Coagulation assessment blood test",
+  "cms_shoppable_id": 27
+ },
+ {
+  "slug": "cpt-70450",
+  "id": "cpt-hcpcs:70450",
+  "code": "70450",
+  "code_type": "CPT/HCPCS",
+  "category": "Radiology",
+  "description": "CT scan, head or brain, without contrast",
+  "cms_shoppable_id": 28
+ },
+ {
+  "slug": "cpt-70553",
+  "id": "cpt-hcpcs:70553",
+  "code": "70553",
+  "code_type": "CPT/HCPCS",
+  "category": "Radiology",
+  "description": "MRI scan of brain before and after contrast",
+  "cms_shoppable_id": 29
+ },
+ {
+  "slug": "cpt-72110",
+  "id": "cpt-hcpcs:72110",
+  "code": "72110",
+  "code_type": "CPT/HCPCS",
+  "category": "Radiology",
+  "description": "X-Ray, lower back, minimum four views",
+  "cms_shoppable_id": 30
+ },
+ {
+  "slug": "cpt-72148",
+  "id": "cpt-hcpcs:72148",
+  "code": "72148",
+  "code_type": "CPT/HCPCS",
+  "category": "Radiology",
+  "description": "MRI scan of lower spinal canal",
+  "cms_shoppable_id": 31
+ },
+ {
+  "slug": "cpt-72193",
+  "id": "cpt-hcpcs:72193",
+  "code": "72193",
+  "code_type": "CPT/HCPCS",
+  "category": "Radiology",
+  "description": "CT scan, pelvis, with contrast",
+  "cms_shoppable_id": 32
+ },
+ {
+  "slug": "cpt-73721",
+  "id": "cpt-hcpcs:73721",
+  "code": "73721",
+  "code_type": "CPT/HCPCS",
+  "category": "Radiology",
+  "description": "MRI scan of leg joint",
+  "cms_shoppable_id": 33
+ },
+ {
+  "slug": "cpt-74177",
+  "id": "cpt-hcpcs:74177",
+  "code": "74177",
+  "code_type": "CPT/HCPCS",
+  "category": "Radiology",
+  "description": "CT scan of abdomen and pelvis with contrast",
+  "cms_shoppable_id": 34
+ },
+ {
+  "slug": "cpt-76700",
+  "id": "cpt-hcpcs:76700",
+  "code": "76700",
+  "code_type": "CPT/HCPCS",
+  "category": "Radiology",
+  "description": "Ultrasound of abdomen",
+  "cms_shoppable_id": 35
+ },
+ {
+  "slug": "cpt-76805",
+  "id": "cpt-hcpcs:76805",
+  "code": "76805",
+  "code_type": "CPT/HCPCS",
+  "category": "Radiology",
+  "description": "Abdominal ultrasound of pregnant uterus (greater or equal to 14 weeks 0 days) single or first fetus",
+  "cms_shoppable_id": 36
+ },
+ {
+  "slug": "cpt-76830",
+  "id": "cpt-hcpcs:76830",
+  "code": "76830",
+  "code_type": "CPT/HCPCS",
+  "category": "Radiology",
+  "description": "Ultrasound pelvis through vagina",
+  "cms_shoppable_id": 37
+ },
+ {
+  "slug": "cpt-77065",
+  "id": "cpt-hcpcs:77065",
+  "code": "77065",
+  "code_type": "CPT/HCPCS",
+  "category": "Radiology",
+  "description": "Mammography of one breast",
+  "cms_shoppable_id": 38
+ },
+ {
+  "slug": "cpt-77066",
+  "id": "cpt-hcpcs:77066",
+  "code": "77066",
+  "code_type": "CPT/HCPCS",
+  "category": "Radiology",
+  "description": "Mammography of both breasts",
+  "cms_shoppable_id": 39
+ },
+ {
+  "slug": "cpt-77067",
+  "id": "cpt-hcpcs:77067",
+  "code": "77067",
+  "code_type": "CPT/HCPCS",
+  "category": "Radiology",
+  "description": "Mammography, screening, bilateral",
+  "cms_shoppable_id": 40
+ },
+ {
+  "slug": "drg-216",
+  "id": "ms-drg:216",
+  "code": "216",
+  "code_type": "MS-DRG",
+  "category": "Medicine & Surgery",
+  "description": "Cardiac valve and other major cardiothoracic procedures with cardiac catheterization with major complications or comorbidities",
+  "cms_shoppable_id": 41
+ },
+ {
+  "slug": "drg-460",
+  "id": "ms-drg:460",
+  "code": "460",
+  "code_type": "MS-DRG",
+  "category": "Medicine & Surgery",
+  "description": "Spinal fusion except cervical without major comorbid conditions or complications (MCC)",
+  "cms_shoppable_id": 42
+ },
+ {
+  "slug": "drg-470",
+  "id": "ms-drg:470",
+  "code": "470",
+  "code_type": "MS-DRG",
+  "category": "Medicine & Surgery",
+  "description": "Major joint replacement or reattachment of lower extremity without major comorbid conditions or complications (MCC)",
+  "cms_shoppable_id": 43
+ },
+ {
+  "slug": "drg-473",
+  "id": "ms-drg:473",
+  "code": "473",
+  "code_type": "MS-DRG",
+  "category": "Medicine & Surgery",
+  "description": "Cervical spinal fusion without comorbid conditions (CC) or major comorbid conditions or complications (MCC)",
+  "cms_shoppable_id": 44
+ },
+ {
+  "slug": "drg-743",
+  "id": "ms-drg:743",
+  "code": "743",
+  "code_type": "MS-DRG",
+  "category": "Medicine & Surgery",
+  "description": "Uterine and adnexa procedures for non-malignancy without comorbid conditions (CC) or major comorbid conditions or complications (MCC)",
+  "cms_shoppable_id": 45
+ },
+ {
+  "slug": "cpt-19120",
+  "id": "cpt-hcpcs:19120",
+  "code": "19120",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Removal of 1 or more breast growth, open procedure",
+  "cms_shoppable_id": 46
+ },
+ {
+  "slug": "cpt-29826",
+  "id": "cpt-hcpcs:29826",
+  "code": "29826",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Shaving of shoulder bone using an endoscope",
+  "cms_shoppable_id": 47
+ },
+ {
+  "slug": "cpt-29881",
+  "id": "cpt-hcpcs:29881",
+  "code": "29881",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Removal of one knee cartilage using an endoscope",
+  "cms_shoppable_id": 48
+ },
+ {
+  "slug": "cpt-42820",
+  "id": "cpt-hcpcs:42820",
+  "code": "42820",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Removal of tonsils and adenoid glands patient younger than age 12",
+  "cms_shoppable_id": 49
+ },
+ {
+  "slug": "cpt-43235",
+  "id": "cpt-hcpcs:43235",
+  "code": "43235",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Diagnostic examination of esophagus, stomach, and/or upper small bowel using an endoscope",
+  "cms_shoppable_id": 50
+ },
+ {
+  "slug": "cpt-43239",
+  "id": "cpt-hcpcs:43239",
+  "code": "43239",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Biopsy of the esophagus, stomach, and/or upper small bowel using an endoscope",
+  "cms_shoppable_id": 51
+ },
+ {
+  "slug": "cpt-45378",
+  "id": "cpt-hcpcs:45378",
+  "code": "45378",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Diagnostic examination of large bowel using an endoscope",
+  "cms_shoppable_id": 52
+ },
+ {
+  "slug": "cpt-45380",
+  "id": "cpt-hcpcs:45380",
+  "code": "45380",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Biopsy of large bowel using an endoscope",
+  "cms_shoppable_id": 53
+ },
+ {
+  "slug": "cpt-45385",
+  "id": "cpt-hcpcs:45385",
+  "code": "45385",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Removal of polyps or growths of large bowel using an endoscope",
+  "cms_shoppable_id": 54
+ },
+ {
+  "slug": "cpt-45391",
+  "id": "cpt-hcpcs:45391",
+  "code": "45391",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Ultrasound examination of lower large bowel using an endoscope",
+  "cms_shoppable_id": 55
+ },
+ {
+  "slug": "cpt-47562",
+  "id": "cpt-hcpcs:47562",
+  "code": "47562",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Removal of gallbladder using an endoscope",
+  "cms_shoppable_id": 56
+ },
+ {
+  "slug": "cpt-49505",
+  "id": "cpt-hcpcs:49505",
+  "code": "49505",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Repair of groin hernia patient age 5 years or older",
+  "cms_shoppable_id": 57
+ },
+ {
+  "slug": "cpt-55700",
+  "id": "cpt-hcpcs:55700",
+  "code": "55700",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Biopsy of prostate gland",
+  "cms_shoppable_id": 58
+ },
+ {
+  "slug": "cpt-55866",
+  "id": "cpt-hcpcs:55866",
+  "code": "55866",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Surgical removal of prostate and surrounding lymph nodes using an endoscope",
+  "cms_shoppable_id": 59
+ },
+ {
+  "slug": "cpt-59400",
+  "id": "cpt-hcpcs:59400",
+  "code": "59400",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Routine obstetric care for vaginal delivery, including pre-and post-delivery care",
+  "cms_shoppable_id": 60
+ },
+ {
+  "slug": "cpt-59510",
+  "id": "cpt-hcpcs:59510",
+  "code": "59510",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Routine obstetric care for cesarean delivery, including pre-and post-delivery care",
+  "cms_shoppable_id": 61
+ },
+ {
+  "slug": "cpt-59610",
+  "id": "cpt-hcpcs:59610",
+  "code": "59610",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Routine obstetric care for vaginal delivery after prior cesarean delivery including pre-and post-delivery care",
+  "cms_shoppable_id": 62
+ },
+ {
+  "slug": "cpt-62322",
+  "id": "cpt-hcpcs:62322",
+  "code": "62322",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Injection of substance into spinal canal of lower back or sacrum using imaging guidance",
+  "cms_shoppable_id": 63
+ },
+ {
+  "slug": "cpt-62323",
+  "id": "cpt-hcpcs:62323",
+  "code": "62323",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Injection of substance into spinal canal of lower back or sacrum using imaging guidance",
+  "cms_shoppable_id": 63
+ },
+ {
+  "slug": "cpt-64483",
+  "id": "cpt-hcpcs:64483",
+  "code": "64483",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Injections of anesthetic and/or steroid drug into lower or sacral spine nerve root using imaging guidance",
+  "cms_shoppable_id": 64
+ },
+ {
+  "slug": "cpt-66821",
+  "id": "cpt-hcpcs:66821",
+  "code": "66821",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Removal of recurring cataract in lens capsule using laser",
+  "cms_shoppable_id": 65
+ },
+ {
+  "slug": "cpt-66984",
+  "id": "cpt-hcpcs:66984",
+  "code": "66984",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Removal of cataract with insertion of lens",
+  "cms_shoppable_id": 66
+ },
+ {
+  "slug": "cpt-93000",
+  "id": "cpt-hcpcs:93000",
+  "code": "93000",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Electrocardiogram, routine, with interpretation and report",
+  "cms_shoppable_id": 67
+ },
+ {
+  "slug": "cpt-93452",
+  "id": "cpt-hcpcs:93452",
+  "code": "93452",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Insertion of catheter into left heart for diagnosis",
+  "cms_shoppable_id": 68
+ },
+ {
+  "slug": "cpt-95810",
+  "id": "cpt-hcpcs:95810",
+  "code": "95810",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Sleep study",
+  "cms_shoppable_id": 69
+ },
+ {
+  "slug": "cpt-97110",
+  "id": "cpt-hcpcs:97110",
+  "code": "97110",
+  "code_type": "CPT/HCPCS",
+  "category": "Medicine & Surgery",
+  "description": "Physical therapy, therapeutic exercise",
+  "cms_shoppable_id": 70
+ }
+]

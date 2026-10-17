@@ -18,3 +18,10 @@ def test_content_types():
         "text/javascript",
         "application/javascript",
     )
+
+
+def test_pages_and_their_data_revalidate():
+    assert deploy_site.cache_control("hospitals/030006/index.html") == "no-cache"
+    assert deploy_site.cache_control("hospitals/030006.data") == "no-cache"
+    assert "immutable" in deploy_site.cache_control("assets/inline/0123456789abcdef.js")
+    assert deploy_site.content_type("hospitals/030006.data") == "text/x-script"

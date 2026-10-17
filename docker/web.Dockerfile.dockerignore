@@ -1,0 +1,9 @@
+# Context for docker/web.Dockerfile (the repo root): the web app and two seeds, nothing else.
+*
+!web/
+web/node_modules
+web/build
+web/.react-router
+web/.env*
+!warehouse/seeds/hospitals.csv
+!warehouse/seeds/shoppable_services.csv

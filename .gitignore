@@ -241,3 +241,7 @@ crash.log
 
 # Terraform backend settings for infra/main (names the state bucket, which includes the account id)
 infra/main/backend.hcl
+
+# The website's own folders, caught by the Python patterns above (lib/, data/).
+!web/app/lib/
+!web/app/data/

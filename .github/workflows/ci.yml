@@ -53,6 +53,9 @@ jobs:
     defaults:
       run:
         working-directory: web
+    env:
+      # The build reads hospital profiles from the public API to pre-render their pages.
+      VITE_API_URL: https://d34vd0vtlauzdf.cloudfront.net
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -62,4 +65,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm test
-      - run: npm run build  # type-checks, then builds
+      - run: npm run build  # data, type-check, pre-render, move inline scripts out
+      - name: build in the container too (docker/web.Dockerfile)
+        working-directory: .
+        run: docker build -f docker/web.Dockerfile --target site --build-arg VITE_API_URL=$VITE_API_URL --output type=local,dest=/tmp/site .

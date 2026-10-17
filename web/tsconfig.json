@@ -9,7 +9,11 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "skipLibCheck": true,
-    "types": ["vite/client"]
+    "resolveJsonModule": true,
+    "verbatimModuleSyntax": true,
+    "types": ["vite/client", "node"],
+    "rootDirs": [".", "./.react-router/types"],
+    "paths": { "~/*": ["./app/*"] }
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["app", "scripts", ".react-router/types/**/*", "react-router.config.ts", "vite.config.ts"]
 }

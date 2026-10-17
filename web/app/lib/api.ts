@@ -1,4 +1,5 @@
-// Client for the price API (api/handler.py), through CloudFront.
+// Client for the price API (api/handler.py), through CloudFront. Used in the browser and,
+// for pre-rendered pages, at build time.
 
 const BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 
@@ -59,7 +60,19 @@ export type Profile = Hospital & {
   failed_rules?: string;
   services?: number;
   price_file_status?: string;
+  shoppable?: ShoppableSummary[];
+  shoppable_services?: number;
   note: string;
+};
+
+// One CMS shoppable service at one hospital, as summarized on its profile.
+export type ShoppableSummary = {
+  service_key: string; // "CPT/HCPCS:73721"
+  description: string;
+  cms_shoppable_id: number;
+  negotiated_median?: number;
+  cash?: number;
+  plans: number;
 };
 
 async function get<T>(path: string, signal?: AbortSignal): Promise<T> {

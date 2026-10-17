@@ -17,5 +17,16 @@ services:
   redis:
     image: redis:7
     ports: ["6379:6379"]
+  # The website's dev server (docker/web.Dockerfile): `docker compose up web`, then
+  # http://localhost:5173. Edits under web/ reload the page.
+  web:
+    build: {context: ., dockerfile: docker/web.Dockerfile, target: dev}
+    profiles: [web]
+    ports: ["5173:5173"]
+    env_file: [{path: web/.env.local, required: false}]
+    volumes:
+      - ./web:/app/web
+      - /app/web/node_modules  # the container's own (Linux) packages, not the host's
+      - ./warehouse/seeds:/app/warehouse/seeds:ro
 volumes:
   pgdata:
