@@ -12,7 +12,8 @@ writes nothing. Key design and costs: docs/03-cloud.md.
 
 Needs PRICES_TABLE (the table name; terraform -chdir=infra/main output prices_table) and
 AWS credentials (AWS_PROFILE locally). With DATA_BUCKET set it also writes the service list
-the API searches (serving/services.json).
+the API searches (serving/services.json); with CLOUDFRONT_DISTRIBUTION_ID set and anything
+changed, it clears the API's CloudFront cache.
 """
 
 import argparse
@@ -188,6 +189,17 @@ def export_services(conn: psycopg.Connection, bucket: str, client=None) -> int:
     return len(services)
 
 
+def invalidate_cache(distribution_id: str, client=None) -> str:
+    """Clear the API's CloudFront cache so new prices show; returns the invalidation id.
+    "/*" counts as one path (1,000 free a month)."""
+    response = (client or boto3.client("cloudfront")).create_invalidation(
+        DistributionId=distribution_id,
+        InvalidationBatch={"Paths": {"Quantity": 1, "Items": ["/*"]},
+                           "CallerReference": f"export-{time.time_ns()}"},
+    )  # fmt: skip
+    return response["Invalidation"]["Id"]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--dry-run", action="store_true", help="count what would change")
@@ -210,6 +222,9 @@ def main() -> None:
             print(
                 f"wrote {export_services(conn, bucket):,} services to s3://{bucket}/{SERVICES_KEY}"
             )
+    distribution = os.environ.get("CLOUDFRONT_DISTRIBUTION_ID")
+    if distribution and not args.dry_run and (counts["put"] or counts["deleted"]):
+        print(f"cleared the API cache (invalidation {invalidate_cache(distribution)})")
 
 
 if __name__ == "__main__":

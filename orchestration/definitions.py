@@ -239,6 +239,9 @@ def dynamodb_items(context: dg.AssetExecutionContext) -> dg.MaterializeResult:
         counts = export_dynamodb.export(table, conn)
         if bucket := os.environ.get("DATA_BUCKET"):  # the service list the API searches
             counts["services"] = export_dynamodb.export_services(conn, bucket)
+    distribution = os.environ.get("CLOUDFRONT_DISTRIBUTION_ID")
+    if distribution and (counts["put"] or counts["deleted"]):  # new prices: clear the API cache
+        counts["invalidation"] = export_dynamodb.invalidate_cache(distribution)
     context.log.info(f"put {counts['put']:,}, deleted {counts['deleted']:,}")
     return dg.MaterializeResult(metadata=counts | {"table": table_name})
 

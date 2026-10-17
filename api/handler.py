@@ -27,6 +27,9 @@ DATA_BUCKET = os.environ.get("DATA_BUCKET", "")
 SERVICES_KEY = os.environ.get("SERVICES_KEY", "serving/services.json")
 SEARCH_LIMIT = 25
 NOTE = "Published hospital standard charges, not a quote. Check with your insurer and hospital."
+# CloudFront keeps an answer a day (s-maxage) and is cleared after each weekly export;
+# browsers keep it five minutes (max-age), so a cleared cache reaches people quickly.
+CACHE_CONTROL = "public, max-age=300, s-maxage=86400"
 
 _table = None
 _services = None
@@ -166,7 +169,7 @@ def respond(status: int, body: dict, gzip_ok: bool = False) -> dict:
     don't compress, and a compare response is several hundred KB of JSON."""
     text = json.dumps(body, default=to_json, separators=(",", ":"))
     headers = {"Content-Type": "application/json",
-               "Cache-Control": "public, max-age=3600" if status == 200 else "no-store",
+               "Cache-Control": CACHE_CONTROL if status == 200 else "no-store",
                "Vary": "Accept-Encoding"}  # fmt: skip
     if gzip_ok and len(text) > 1024:
         headers["Content-Encoding"] = "gzip"

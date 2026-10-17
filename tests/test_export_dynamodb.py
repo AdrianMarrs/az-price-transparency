@@ -127,3 +127,16 @@ def test_search_terms_from_the_seed_cover_the_billing_language():
     )
     assert "doctor" in search_terms("99213", "OFFICE O/P EST LOW 20 MIN", rules)
     assert search_terms("86003", "ALLERGEN SPECIFIC IGE", rules) is None
+
+
+def test_invalidate_cache_clears_everything_in_one_path():
+    from serving.export_dynamodb import invalidate_cache
+
+    class FakeCloudFront:
+        def create_invalidation(self, DistributionId, InvalidationBatch):
+            self.args = (DistributionId, InvalidationBatch)
+            return {"Invalidation": {"Id": "I123"}}
+
+    cf = FakeCloudFront()
+    assert invalidate_cache("E1", cf) == "I123"
+    assert cf.args[0] == "E1" and cf.args[1]["Paths"] == {"Quantity": 1, "Items": ["/*"]}

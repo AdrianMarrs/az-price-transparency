@@ -133,3 +133,9 @@ def test_search_uses_plain_english_terms(monkeypatch):
                  "hospitals": 56}]  # fmt: skip
     monkeypatch.setattr(api, "_services", services)
     assert [s["id"] for s in get("/services", q="knee mri")[1]["services"]] == ["cpt-hcpcs:73721"]
+
+
+def test_answers_cache_a_day_at_cloudfront_and_minutes_in_browsers():
+    cache = api.handler({"rawPath": "/providers/030006"})["headers"]["Cache-Control"]
+    assert "s-maxage=86400" in cache and "max-age=300" in cache
+    assert api.handler({"rawPath": "/providers/abc"})["headers"]["Cache-Control"] == "no-store"

@@ -138,7 +138,21 @@ Measured 2026-10-16 (compare = every hospital's knee MRI prices, 56 hospitals):
 | 1024 MB | 265 ms | 1.0 s | 616 KB |
 | 1024 MB + gzip | ~270 ms | 0.63 s | 36 KB |
 
-CPU scales with Lambda memory, and decoding ~400 KB of DynamoDB items is CPU-bound (it used 125 MB either way). API Gateway HTTP APIs don't compress, so the handler gzips when the client accepts it. Search and profile requests take 2–30 ms in the Lambda. CloudFront caching comes next.
+CPU scales with Lambda memory, and decoding ~400 KB of DynamoDB items is CPU-bound (it used 125 MB either way). API Gateway HTTP APIs don't compress, so the handler gzips when the client accepts it. Search and profile requests take 2–30 ms in the Lambda.
+
+## CloudFront
+
+A CloudFront distribution (`infra/main/cloudfront.tf`) sits in front of the API. Its cache key is the path plus `q`, `payer` and `market` only, so other query parameters can't bypass the cache. The handler sends `Cache-Control: public, max-age=300, s-maxage=86400`: CloudFront keeps an answer a day, browsers five minutes. After an export that changed anything, the exporter (and the Dagster asset) clears the cache with one `/*` invalidation when `CLOUDFRONT_DISTRIBUTION_ID` is set; tested once by hand: the invalidation completed and the next request was a miss.
+
+Measured 2026-10-16 from Tucson, medians of five requests, gzip on:
+
+| Request | API Gateway directly | CloudFront, first (miss) | CloudFront, repeat (hit) |
+| --- | ---: | ---: | ---: |
+| Search: `knee mri` | 0.31 s | 0.39 s | 0.10 s |
+| Compare: knee MRI at 56 hospitals | 0.65 s | 0.65 s | 0.11 s |
+| Hospital profile | 0.30 s | 0.31 s | 0.10 s |
+
+A hit never invokes the Lambda or reads DynamoDB, so repeat questions cost CloudFront's per-request price only (inside its free tier at this traffic). Price class 100 (North American and European edges) is the cheapest.
 
 ## Blocked: GitHub Actions to AWS (OIDC)
 
