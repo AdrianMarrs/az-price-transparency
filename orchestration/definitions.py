@@ -7,6 +7,7 @@ Asset graph (left to right):
     hospital_list -> hospital_sources -> price_file[ccn] -> parsed_prices[ccn]
         -> raw/hospital_charges[ccn] -> dbt models
     parsed_prices -> raw/payer_plans, raw/compliance_checks -> dbt models
+    dbt serving models -> dynamodb_items
 
 price_file, parsed_prices and raw/hospital_charges have one partition per in-scope
 hospital, so one hospital's bad file fails only its own partition.
@@ -19,6 +20,7 @@ from contextlib import contextmanager
 from datetime import date, timedelta
 from pathlib import Path
 
+import boto3
 import dagster as dg
 import polars as pl
 import psycopg
@@ -35,6 +37,7 @@ from ingest.hospitals.parse import (
     parse_one,
     update_report,
 )
+from serving import export_dynamodb
 
 ROOT = Path(__file__).resolve().parents[1]
 HOSPITALS_SEED = ROOT / "warehouse" / "seeds" / "hospitals.csv"
@@ -217,6 +220,27 @@ def warehouse_models(context: dg.AssetExecutionContext, dbt: DbtCliResource):
     yield from dbt.cli(["build"], context=context).stream()
 
 
+# ---------- serving ----------
+
+
+@dg.asset(
+    group_name="serving",
+    deps=[dg.AssetKey("srv_hospital_service_items"), dg.AssetKey("srv_hospital_profiles")],
+    description="Changed serving items written to DynamoDB (PRICES_TABLE); removed ones deleted",
+)
+def dynamodb_items(context: dg.AssetExecutionContext) -> dg.MaterializeResult:
+    table_name = os.environ.get("PRICES_TABLE")
+    if not table_name:
+        raise dg.Failure(
+            "PRICES_TABLE is not set (terraform -chdir=infra/main output prices_table)"
+        )
+    table = boto3.resource("dynamodb").Table(table_name)
+    with psycopg.connect(DATABASE_URL, autocommit=True) as conn:
+        counts = export_dynamodb.export(table, conn)
+    context.log.info(f"put {counts['put']:,}, deleted {counts['deleted']:,}")
+    return dg.MaterializeResult(metadata=counts | {"table": table_name})
+
+
 # ---------- jobs, schedules, alerts ----------
 
 discovery_job = dg.define_asset_job(
@@ -230,6 +254,10 @@ warehouse_job = dg.define_asset_job(
     "build_warehouse",
     selection=dg.AssetSelection.assets(payer_plan_names, compliance_checks)
     | dg.AssetSelection.assets(warehouse_models),
+)
+# Separate from build_warehouse so the warehouse builds without AWS (locally, in CI).
+export_job = dg.define_asset_job(
+    "export_serving", selection=dg.AssetSelection.assets(dynamodb_items)
 )
 
 
@@ -253,6 +281,12 @@ def weekly_warehouse_build():
     return dg.RunRequest()
 
 
+@dg.schedule(job=export_job, cron_schedule="0 13 * * 1", execution_timezone="America/Phoenix")
+def weekly_serving_export():
+    """Mondays 13:00: write what changed to DynamoDB (the build takes about an hour)."""
+    return dg.RunRequest()
+
+
 @dg.run_failure_sensor(description="Post failed runs to ALERT_WEBHOOK_URL (Slack-compatible)")
 def alert_on_failure(context: dg.RunFailureSensorContext):
     message = (f"az-price-transparency: run {context.dagster_run.job_name} failed: "
@@ -270,10 +304,11 @@ def alert_on_failure(context: dg.RunFailureSensorContext):
 
 defs = dg.Definitions(
     assets=[hospital_list_seed, hospital_sources, price_file, parsed_prices, warehouse_prices,
-            payer_plan_names, compliance_checks, warehouse_models],
+            payer_plan_names, compliance_checks, warehouse_models, dynamodb_items],
     asset_checks=[parsed_row_count_stable, parsed_file_is_current],
-    jobs=[discovery_job, hospital_job, warehouse_job],
-    schedules=[weekly_discovery, weekly_hospital_refresh, weekly_warehouse_build],
+    jobs=[discovery_job, hospital_job, warehouse_job, export_job],
+    schedules=[weekly_discovery, weekly_hospital_refresh, weekly_warehouse_build,
+               weekly_serving_export],
     sensors=[alert_on_failure],
     resources={"dbt": DbtCliResource(project_dir=dbt_project)},
 )  # fmt: skip

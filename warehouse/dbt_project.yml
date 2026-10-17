@@ -18,6 +18,9 @@ models:
     marts:
       +schema: marts
       +materialized: table
+    serving:
+      +schema: serving
+      +materialized: table
 
 seeds:
   az_prices:

@@ -51,3 +51,10 @@ def test_weekly_schedule_requests_one_run_per_hospital():
     keys = [r.partition_key for r in requests.run_requests]
     assert sorted(keys) == hospital_partitions.get_partition_keys()
     assert len({r.run_key for r in requests.run_requests}) == 95
+
+
+def test_dynamodb_export_follows_the_serving_models():
+    assert parents(dg.AssetKey("dynamodb_items")) == {
+        dg.AssetKey("srv_hospital_service_items"),
+        dg.AssetKey("srv_hospital_profiles"),
+    }

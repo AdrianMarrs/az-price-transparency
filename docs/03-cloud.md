@@ -37,19 +37,21 @@ Written before any code, because in DynamoDB the keys are the queries: it fetche
 
 ### Sizes (measured 2026-10-16)
 
-| | |
-| --- | ---: |
-| Hospital × service items | 338,697 |
-| Average item | 4.7 KB |
-| 99th percentile | 16 KB |
-| Largest | 134 KB (876 price entries) |
-| Total | about 1.6 GB |
+The design estimate used one-letter field names; the built items use readable ones (`payer`, `plan`, `market`, ...) and carry algorithm text, so they came out bigger:
 
-The item limit is 400 KB, so the largest is at a third of it. The exporter fails loudly on any item over 350 KB rather than truncating it. A compare query reads up to 69 items, about 320 KB on average, which is under the 1 MB `Query` page limit, so most compare requests take one page.
+| | Estimate | Built |
+| --- | ---: | ---: |
+| Hospital × service items | 338,697 | 338,697 (+ 95 profiles) |
+| Average item, as DynamoDB counts it (nulls dropped) | 4.7 KB | 5.8 KB |
+| 99th percentile (JSON) | 16 KB | 30 KB |
+| Largest (JSON) | 134 KB | 240 KB |
+| Total JSON | 1.6 GB | 2.8 GB |
+
+The item limit is 400 KB; a dbt test fails any item over 350 KB, and the exporter refuses one rather than truncating it. A compare query reads up to 69 items, about 400 KB on average, under the 1 MB `Query` page limit, so most compare requests take one page.
 
 ### Cost
 
-On-demand writes cost one write unit per KB, and the index costs the same again. A full export is about 3.4M write units, roughly $2. Storage is inside the 25 GB free tier.
+On-demand writes cost one write unit per KB, and the index costs the same again. A full export is about 4.3M write units, roughly $2.70 (estimated at $2 before the items were built). Storage is inside the 25 GB free tier.
 
 To keep weekly runs near zero, the export is idempotent and incremental. Each item's JSON is built deterministically and hashed. The exporter keeps the last exported hash per key in Postgres, writes only items whose hash changed, and deletes items that are no longer produced. A rerun with the same input writes nothing.
 
@@ -100,7 +102,19 @@ uv run dagster dev -m orchestration.definitions
 
 ## DynamoDB table
 
-`az-price-transparency-prices` (`infra/main/dynamodb.tf`): on-demand, with the `by_service` index, as designed above. No point-in-time recovery (billed per GB; the export rebuilds it) and no deletion protection, so `terraform destroy` still removes everything. Empty until the export step.
+`az-price-transparency-prices` (`infra/main/dynamodb.tf`): on-demand, with the `by_service` index, as designed above. No point-in-time recovery (billed per GB; the export rebuilds it) and no deletion protection, so `terraform destroy` still removes everything. First export 2026-10-16: 338,792 items in 51 minutes (one writer thread; parallel writers would cut that if it matters), and an unchanged rerun wrote nothing in 2 seconds. Spot-checked against Postgres: Tucson Medical Center's outpatient Aetna knee MRI price matches, and 56 hospitals price a knee MRI in both.
+
+## Export to DynamoDB
+
+- **dbt shapes the items** (`warehouse/models/serving/`): `srv_hospital_service_items` (one row per hospital × service: prices per payer × plan × setting × price type, with parent company, market, most common methodology, median amount and row count; plus the non-insurer gross, cash, min and max prices) and `srv_hospital_profiles` (one per in-scope hospital, including those with no usable prices). Each row carries its item as JSON built in a fixed order, its `content_hash` and its size. Postgres builds all 338K items in about five minutes.
+- **`serving/export_dynamodb.py` writes them:** new and changed items (by hash, against `raw.dynamodb_export_state`) in batches, deletes items no longer produced, and records each chunk only after DynamoDB has accepted it, so an interrupted export resumes and an unchanged rerun writes nothing. `--dry-run` counts without writing.
+- **Dagster:** the `dynamodb_items` asset, in its own `export_serving` job (Mondays 13:00), so the warehouse still builds without AWS.
+
+```
+$env:AWS_PROFILE = "az-price"; $env:PRICES_TABLE = "az-price-transparency-prices"
+uv run python -m serving.export_dynamodb --dry-run
+uv run python -m serving.export_dynamodb
+```
 
 ## Blocked: GitHub Actions to AWS (OIDC)
 

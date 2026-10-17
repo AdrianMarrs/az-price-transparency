@@ -1,0 +1,27 @@
+version: 2
+
+# DynamoDB items, one row each, exported by serving/export_dynamodb.py.
+# DynamoDB's item limit is 400 KB; the export refuses anything over 350 KB.
+
+models:
+  - name: srv_hospital_service_items
+    description: One hospital x service item (prices per plan) for the serving table.
+    columns:
+      - name: item_key
+        data_tests: [unique, not_null]
+      - name: content_hash
+        data_tests: [not_null]
+      - name: item_bytes
+        data_tests:
+          - under_dynamodb_item_limit
+
+  - name: srv_hospital_profiles
+    description: One PROFILE item per in-scope hospital, with its compliance score.
+    columns:
+      - name: item_key
+        data_tests: [unique, not_null]
+      - name: content_hash
+        data_tests: [not_null]
+      - name: item_bytes
+        data_tests:
+          - under_dynamodb_item_limit
