@@ -44,10 +44,18 @@ SCHEMA = {
 
 
 def network_name(path: Path) -> str:
-    """'2026-10-01_cigna-health-life-insurance-company_arizona-hmo_in-network-rates' -> 'arizona-hmo'."""
+    """The network part of an in-network file's name, without the date and the insurer:
+
+    2026-10-01_cigna-health-life-insurance-company_arizona-hmo_in-network-rates -> arizona-hmo
+    2026-10-01_sagamorehn_cigna_in-network-rates (a partner's file)  -> sagamorehn_cigna
+    2026_10_01_priority_health_PPO_in-network-rates                   -> priority_health_PPO
+    """
     stem = path.name.removesuffix(".jsonl.gz")
-    m = re.match(r"\d{4}-\d{2}-\d{2}_[^_]+_(.+)_in-network-rates$", stem)
-    return m.group(1) if m else stem
+    m = re.match(r"\d{4}[-_]\d{2}[-_]\d{2}_(.+)_in-network-rates$", stem)
+    if not m:
+        return stem
+    entity, _, rest = m.group(1).partition("_")
+    return rest if rest and entity.endswith("-company") else m.group(1)
 
 
 def joined(values) -> str | None:

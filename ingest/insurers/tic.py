@@ -22,9 +22,11 @@ month=<yyyy-mm>/ (and copied to the data bucket when DATA_BUCKET is set).
 
 import argparse
 import gzip
+import itertools
 import json
 import os
 import re
+import struct
 import sys
 import time
 import tracemalloc
@@ -87,22 +89,82 @@ def keep_rates(item: dict, kept: dict[int, set[str]], npi_to_ccn: dict[int, str]
     return {k: v for k, v in item.items() if k != "negotiated_rates"} | {"negotiated_rates": rates}
 
 
-def gunzip_chunks(chunks: Iterator[bytes]) -> Iterator[bytes]:
-    """Decompress a gzip stream in pieces of at most JSON_CHUNK bytes. These files compress
-    about 22x, so one 1 MB download chunk would otherwise become ~22 MB of JSON at once."""
-    z = zlib.decompressobj(16 + zlib.MAX_WBITS)
+ZIP_HEADER = struct.Struct("<4s5H3I2H")  # a zip local file header, before the name
+
+
+def decompress_chunks(chunks: Iterator[bytes]) -> Iterator[bytes]:
+    """JSON from a gzip file, a one-file zip, or plain JSON, in pieces of at most JSON_CHUNK
+    bytes. These files compress about 22x, so one 1 MB download chunk would otherwise become
+    ~22 MB of JSON at once. The format comes from the first bytes, not the file name:
+
+    - gzip (1f 8b), possibly several members back to back;
+    - zip (PK 03 04): the first entry is inflated straight after its local header, so the
+      archive's directory at the end is never needed (Cigna's partner files are zips of
+      one JSON file);
+    - anything else is passed through as uncompressed JSON."""
+    chunks = iter(chunks)
+    head = b""
     for chunk in chunks:
-        data = chunk
+        head += chunk
+        if len(head) >= ZIP_HEADER.size:
+            break
+    if head.startswith(b"\x1f\x8b"):
+        yield from inflate(head, chunks, 16 + zlib.MAX_WBITS, multi_member=True)
+    elif head.startswith(b"PK\x03\x04"):
+        yield from unzip_first_entry(head, chunks)
+    else:
+        yield head
+        yield from chunks
+
+
+def unzip_first_entry(head: bytes, chunks: Iterator[bytes]) -> Iterator[bytes]:
+    _, _, flags, method, _, _, _, size, _, name_len, extra_len = ZIP_HEADER.unpack_from(head)
+    start = ZIP_HEADER.size + name_len + extra_len
+    while len(head) < start:
+        head += next(chunks)
+    if flags & 0x01:
+        raise ValueError("encrypted zip entry")
+    if method == 8:  # deflate
+        yield from inflate(head[start:], chunks, -zlib.MAX_WBITS)
+    elif method == 0 and not flags & 0x08 and size != 0xFFFFFFFF:  # stored, size known
+        remaining = size
+        for data in itertools.chain([head[start:]], chunks):
+            if data[:remaining]:
+                yield data[:remaining]
+            remaining -= len(data)
+            if remaining <= 0:
+                return
+        raise ValueError("zip entry ended early")
+    else:
+        raise ValueError(f"unsupported zip entry: method {method}, flags {flags:#x}")
+
+
+def inflate(first: bytes, chunks: Iterator[bytes], wbits: int,
+            multi_member: bool = False) -> Iterator[bytes]:  # fmt: skip
+    """Decompress until the stream ends. With multi_member (gzip), a new member may follow;
+    otherwise what follows is ignored (the rest of a zip). A stream that stops before its
+    end raises, so a cut-off download is never taken for a complete file."""
+    z, fed = zlib.decompressobj(wbits), False
+    for data in itertools.chain([first], chunks):
         while data:
+            fed = True
             if out := z.decompress(data, JSON_CHUNK):
                 yield out
-            data = z.unconsumed_tail
-    if tail := z.flush():
-        yield tail
+            if not z.eof:
+                data = z.unconsumed_tail
+                continue
+            if not multi_member:
+                return
+            # zero padding after the last member is allowed
+            data, z, fed = z.unused_data.lstrip(b"\0"), zlib.decompressobj(wbits), False
+    if fed and not z.eof:
+        raise zlib.error("compressed stream ended early")
 
 
 def byte_chunks(source: str, client: httpx.Client | None = None) -> Iterator[bytes]:
-    """Compressed bytes from a URL (streamed) or a local path."""
+    """The file's bytes as stored, from a URL (streamed) or a local path. Raw, not decoded:
+    some .json.gz files are also served with Content-Encoding: gzip, and httpx would undo
+    that layer, leaving JSON where decompress_chunks expects gzip."""
     if re.match(r"https?://", source):
         owns = client is None
         client = client or httpx.Client(timeout=httpx.Timeout(60, read=300), follow_redirects=True,
@@ -110,7 +172,7 @@ def byte_chunks(source: str, client: httpx.Client | None = None) -> Iterator[byt
         try:
             with client.stream("GET", source) as r:
                 r.raise_for_status()
-                yield from r.iter_bytes(CHUNK)
+                yield from r.iter_raw(CHUNK)
         finally:
             if owns:
                 client.close()
@@ -181,12 +243,12 @@ class FirstKey:
 
 
 class GunzipReader:
-    """A file-like view of gunzip_chunks, for ijson's pull API (which runs entirely in C, about
+    """A file-like view of decompress_chunks, for ijson's pull API (which runs entirely in C, about
     twice as fast as feeding its push API)."""
 
     def __init__(self, chunks: Iterator[bytes]):
         self.source, self.buf = chunks, bytearray()
-        self.chunks = gunzip_chunks(chunks)
+        self.chunks = decompress_chunks(chunks)
 
     def read(self, n: int = CHUNK) -> bytes:
         while len(self.buf) < n and (chunk := next(self.chunks, None)) is not None:
@@ -245,7 +307,9 @@ def in_network_files(toc: dict, network: str) -> list[str]:
 
 
 def output_path(insurer: str, month: str, url: str) -> Path:
-    name = url.split("?")[0].rsplit("/", 1)[-1].removesuffix(".gz").removesuffix(".json")
+    name = url.split("?")[0].rsplit("/", 1)[-1]
+    for suffix in (".gz", ".zip", ".json"):
+        name = name.removesuffix(suffix)
     return RAW_DIR / f"insurer={insurer}" / f"month={month}" / f"{name}.jsonl.gz"
 
 

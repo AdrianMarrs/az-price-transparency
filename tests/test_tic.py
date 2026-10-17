@@ -1,7 +1,10 @@
 """Streaming TiC parser tests on tiny hand-made files that follow the CMS schema."""
 
 import gzip
+import io
 import json
+import zipfile
+import zlib
 
 import httpx
 import pytest
@@ -119,14 +122,55 @@ def test_references_after_the_rates_are_still_found(tmp_path, monkeypatch, chunk
     assert stats["refs_first"] is False
 
 
+def serving(body: bytes, headers: dict | None = None) -> httpx.Client:
+    """A client whose every request streams `body`, like a real download."""
+    return httpx.Client(transport=httpx.MockTransport(
+        lambda r: httpx.Response(200, headers=headers, stream=httpx.ByteStream(body))))  # fmt: skip
+
+
 def test_stream_file_reads_from_a_url():
     body = file_with(refs_first=True)
-    client = httpx.Client(
-        transport=httpx.MockTransport(lambda r: httpx.Response(200, content=body))
-    )
     stats = {}
-    items = list(stream_file("https://example.org/rates.json.gz", NPIS, client=client, stats=stats))
+    items = list(stream_file("https://example.org/rates.json.gz", NPIS, client=serving(body),
+                             stats=stats))  # fmt: skip
     assert len(items) == 2 and stats["compressed"] >= len(body)  # two passes over a tiny file
+
+
+def test_a_gzip_file_served_with_content_encoding_gzip_is_read_once_decompressed():
+    # Cigna serves some .json.gz files with Content-Encoding: gzip; httpx must not undo it.
+    client = serving(file_with(refs_first=True), {"Content-Encoding": "gzip"})
+    items = list(stream_file("https://example.org/rates.json.gz", NPIS, client=client))
+    assert [i["billing_code"] for i in items] == ["73721", "470"]
+
+
+def zipped(data: bytes, method: int) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=method) as z:
+        z.writestr("2026-10-01_partner_in-network-rates.json", data)
+    return buffer.getvalue()
+
+
+@pytest.mark.parametrize("method", [zipfile.ZIP_DEFLATED, zipfile.ZIP_STORED])
+@pytest.mark.parametrize("chunk", [7, 1 << 20])
+def test_zip_and_plain_json_files_are_read_too(tmp_path, monkeypatch, method, chunk):
+    monkeypatch.setattr(tic, "CHUNK", chunk)
+    plain = gzip.decompress(file_with(refs_first=True))
+    for name, body in [("rates.zip", zipped(plain, method)), ("rates.json", plain)]:
+        (tmp_path / name).write_bytes(body)
+        items = list(stream_file(str(tmp_path / name), NPIS))
+        assert [i["billing_code"] for i in items] == ["73721", "470"], name
+
+
+def test_several_gzip_members_are_one_file():
+    doc = gzip.decompress(file_with(refs_first=True))
+    two = gzip.compress(doc[:100]) + gzip.compress(doc[100:])
+    assert b"".join(tic.decompress_chunks(iter([two]))) == doc
+
+
+def test_a_cut_off_download_raises():
+    body = file_with(refs_first=True)
+    with pytest.raises(zlib.error):
+        b"".join(tic.decompress_chunks(iter([body[: len(body) // 2]])))
 
 
 def test_in_network_files_dedupes_and_filters_by_name():

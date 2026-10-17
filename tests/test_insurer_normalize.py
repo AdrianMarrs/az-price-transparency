@@ -22,10 +22,21 @@ LINE = {
 def test_network_name_from_the_file_name(tmp_path):
     name = "2026-10-01_cigna-health-life-insurance-company_arizona-hmo_in-network-rates.jsonl.gz"
     assert network_name(tmp_path / name) == "arizona-hmo"
+    partners = {
+        "2026-10-01_sagamorehn_cigna_in-network-rates.jsonl.gz": "sagamorehn_cigna",
+        "2026_10_01_priority_health_PPO_in-network-rates.jsonl.gz": "priority_health_PPO",
+        "2026-10-01_upper-midwest-affiliation-partner_cigna-ppo_in-network-rates.jsonl.gz":
+            "upper-midwest-affiliation-partner_cigna-ppo",
+    }  # fmt: skip
+    for file, network in partners.items():
+        assert network_name(tmp_path / file) == network
 
 
 def test_one_row_per_hospital_and_price_with_duplicates_removed(tmp_path):
-    path = tmp_path / "2026-10-01_cigna-x_arizona-hmo_in-network-rates.jsonl.gz"
+    path = (
+        tmp_path
+        / "2026-10-01_cigna-health-life-insurance-company_arizona-hmo_in-network-rates.jsonl.gz"
+    )
     with gzip.open(path, "wt", encoding="utf-8") as f:
         f.write(json.dumps(LINE) + "\n")
     df = normalize_file(path, "cigna", "2026-10")
