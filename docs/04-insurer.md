@@ -105,3 +105,42 @@ The serving models (the DynamoDB items and `price_summary`) read hospital rows o
 **A first look, before matching plans properly.** Matching each hospital's own Cigna price to Cigna's published rate for the same hospital, code, setting and billing class (medians on both sides) gives 64,970 pairs at 32 hospitals. Cigna's number is 20% higher at the median; only 8.7% agree within 1%, and 26% differ by more than 2x. Hospital files label plans loosely ("Commercial", "All Commercial Plans") while Cigna's are specific networks, so part of this is comparing different contracts.
 
 **Disk space.** dbt rebuilds a table by writing a full new copy before dropping the old one, so rebuilding `fct_prices` (4.2 GB) briefly needs twice its size. On a nearly full laptop that filled the disk mid-build. Postgres recovered cleanly from its write-ahead log on restart.
+
+## The monthly cloud run
+
+`ingest/insurers/run.py` runs every in-network file in Cigna's table of contents, in a container on ECS Fargate (`infra/main/insurer_run.tf`, image from `docker/insurer.Dockerfile`).
+
+- **Finding the files.** Cigna's index URL is signed and expires after about a month, so it can't be stored. Cigna publishes a small pointer, `cigna.com/static/mrf/latest.json`, with the current signed URL and its reporting month; the run starts there. (Cigna also publishes per-state indexes, but only for Colorado.)
+- **Parallel.** One worker process per vCPU, each streaming one file at a time. 4 vCPU, 8 GB, ARM64 (Graviton, about 20% cheaper than x86).
+- **Resumable.** Each file's status is an item in DynamoDB (`az-price-transparency-runs`): queued, done with its stats, or failed with the error. A rerun for the same month skips done files, so a failure costs only the files that failed. Each run adds a `SUMMARY#<start>` item.
+- **Scheduled** by EventBridge Scheduler at 06:00 UTC on the 5th of each month. If the insurer hasn't posted the new month yet, the pointer still names last month, every file is already done, and the run exits within a minute.
+- **Guardrails.** A 4-hour timeout on the container (a run takes about one), least-privilege roles (the task can write only `raw/insurer=*`, `parquet/insurer=*` and its status table), outbound-only networking in the default VPC (no NAT gateway, which would cost about $32 a month), and $20 and $50 monthly budget alerts for the account.
+
+### The first run (October 2026)
+
+| | |
+| --- | --- |
+| Files | 124 (29.7 GB compressed) |
+| Wall time | 61 minutes on 4 vCPU; 3.7 hours of parsing in total |
+| Parse rate | 2.0–2.8 MB/s per worker, the same as the laptop |
+| Estimated cost | $0.16 (vCPU and memory hours at Fargate's ARM price) |
+| Kept | 4,851,647 rates in 23 networks; 101 networks have no Arizona hospital |
+
+**Nine files failed, and a resume fixed them in 3½ minutes.** All nine raised "incorrect header check", meaning they weren't gzip as the parser assumed:
+
+- Five `.json.gz` files are *also* served with `Content-Encoding: gzip`, so httpx removed the gzip layer before the parser saw it. Downloads are now read raw.
+- Four partner files (Sagamore, Upper Midwest, Priority Health) are `.zip` archives of one JSON file. The parser now inflates the first entry straight after its local header, so it streams like gzip and never needs the archive's directory at the end.
+
+The format now comes from the file's first bytes, not its name, and a stream that stops early raises instead of being read as a complete file. The resume skipped the 115 finished files and ran only the nine.
+
+**National networks carry most of the Arizona data.** National PPO and OAP each cover 76 Arizona hospitals, more than the Arizona-specific networks (Arizona HMO: 48). Many networks carry identical rate sets (seven networks have exactly 303,013 rows, four have 304,444): the same national contract sold under different names. Counting distinct prices means deduplicating across networks.
+
+**Inline provider groups.** The schema lets a rate list its providers inline instead of by reference to `provider_references`; the parser originally skipped those without noticing. It now matches them and counts them per file (`inline_group_rates`). None of the nine files rerun with the new code use them; the November run will count all 124.
+
+**Cost per run** comes from Cost Explorer, which lags by up to a day: `scripts/run_cost.py --month 2026-10` writes the ECS charge for the run days next to the estimate.
+
+### Loading
+
+`uv run python -m ingest.insurers.load --month 2026-10 --from-bucket` downloads the month's Parquet (124 files, 23 MB) and loads it: 4,851,647 rows into `raw.insurer_rates`.
+
+In the warehouse: 3,098,950 of those rows reach `fct_prices` (the codes some hospital also prices), covering 55 hospitals; 326,615 are distinct once the same contract repeated across networks is counted once. Cigna has rates for 76 Arizona hospitals in all. The other 21 are mostly behavioral health hospitals (Haven, Oasis, Quail Run, Palo Verde) and small rural ones (Page, Copper Queen, Cobre Valley): Cigna pays them per day by revenue code, or a percentage of billed charges (`CSTM-ALL`, "all services"), not per procedure. Those rates stay in `stg_insurer_rates`; there's no CPT or DRG price at the hospital to compare them with. The site's data is unchanged (the export's dry run would write nothing).
