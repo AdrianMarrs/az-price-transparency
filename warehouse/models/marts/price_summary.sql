@@ -21,7 +21,8 @@ with prices as (
     -- market comes from payer + plan (a "Work Comp" plan under a commercial payer)
     left join {{ ref('dim_payer_plans') }} as p
         on p.payer_name = f.payer_name and p.plan_name is not distinct from f.plan_name
-    where f.price_type in ('negotiated_dollar', 'discounted_cash', 'gross')
+    where f.source = 'hospital'
+      and f.price_type in ('negotiated_dollar', 'discounted_cash', 'gross')
       and coalesce(p.market, '') not in ('self_pay')
 ),
 

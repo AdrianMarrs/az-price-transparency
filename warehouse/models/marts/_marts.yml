@@ -57,10 +57,17 @@ models:
         data_tests:
           - relationships:
               arguments: {to: ref('dim_services'), field: service_key}
+      - name: source
+        data_tests:
+          - accepted_values:
+              arguments: {values: ["hospital", "insurer"]}
       - name: payer_name
+        description: For insurer rows, the insurer (not in dim_payers, which lists hospital files' names).
         data_tests:
           - relationships:
               arguments: {to: ref('dim_payers'), field: payer_name}
+              config:
+                where: "source = 'hospital'"
       - name: amount
         description: Null only for negotiated_algorithm prices.
 

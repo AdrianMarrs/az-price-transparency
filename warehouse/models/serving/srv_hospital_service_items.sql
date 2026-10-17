@@ -26,6 +26,7 @@ with grouped as (
     from {{ ref('fct_prices') }} as f
     left join {{ ref('dim_payer_plans') }} as p
         on p.payer_plan_key = md5((f.payer_name, f.plan_name)::text)
+    where f.source = 'hospital'
     group by 1, 2, 3, 4, 5, 6, 7, 8
 ),
 

@@ -3,7 +3,7 @@ version: 2
 sources:
   - name: raw
     schema: raw
-    description: Tables written by the Python loaders in ingest/hospitals/.
+    description: Tables written by the Python loaders in ingest/hospitals/ and ingest/insurers/.
     tables:
       - name: hospital_charges
         description: >
@@ -20,3 +20,7 @@ sources:
         description: >
           One row per hospital x rule from ingest/hospitals/compliance.py. passed is null
           when the rule couldn't be checked (no file to read).
+      - name: insurer_rates
+        description: >
+          One row per hospital (CCN) x negotiated price from an insurer's Transparency in
+          Coverage file, loaded by ingest/insurers/load.py (one network per transaction).

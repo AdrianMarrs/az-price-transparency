@@ -83,3 +83,25 @@ httpx streams the download, zlib decompresses it in pieces of at most 256 KB, an
 Almost all are `fee schedule` dollar amounts; about 2% are percentages and a few are per diem.
 
 **Watch the billing class when comparing.** Many of a hospital's insurer rates are *professional* (for example, the radiologist's read of a knee MRI, $45–$96), while hospital price files mostly list the facility charge. A comparison has to match professional with professional and institutional with institutional.
+
+## In the warehouse
+
+`ingest/insurers/load.py` copies each network's Parquet into `raw.insurer_rates` with COPY, replacing that insurer, month and network in one transaction (671,726 rows; 1.8–13.5 s per network).
+
+`stg_insurer_rates` translates the insurer files' terms into the hospital files' terms:
+
+| Transparency in Coverage | Hospital files / `fct_prices` |
+| --- | --- |
+| `CPT`, `HCPCS` (separate) | `CPT/HCPCS` (combined) |
+| `institutional` | `facility` |
+| `fee schedule`, `per diem` | the same methodology |
+| `percentage` | `negotiated_percentage`, methodology "percent of total billed charges" |
+| `negotiated`, `derived` | methodology "other" |
+
+`fct_prices` now has a `source` column: `hospital` or `insurer`. For insurer rows, `payer_name` is the insurer (`Cigna`) and `plan_name` is the network. Only codes that some hospital also prices are kept: 10,519 of Cigna's 15,808 CPT, HCPCS and MS-DRG codes, or 434,956 rows. Revenue codes, APCs, ICD and custom codes stay in staging.
+
+The serving models (the DynamoDB items and `price_summary`) read hospital rows only, so adding insurer data changed nothing on the site: the items' content hashes and `price_summary` were checked identical before and after.
+
+**A first look, before matching plans properly.** Matching each hospital's own Cigna price to Cigna's published rate for the same hospital, code, setting and billing class (medians on both sides) gives 64,970 pairs at 32 hospitals. Cigna's number is 20% higher at the median; only 8.7% agree within 1%, and 26% differ by more than 2x. Hospital files label plans loosely ("Commercial", "All Commercial Plans") while Cigna's are specific networks, so part of this is comparing different contracts.
+
+**Disk space.** dbt rebuilds a table by writing a full new copy before dropping the old one, so rebuilding `fct_prices` (4.2 GB) briefly needs twice its size. On a nearly full laptop that filled the disk mid-build. Postgres recovered cleanly from its write-ahead log on restart.

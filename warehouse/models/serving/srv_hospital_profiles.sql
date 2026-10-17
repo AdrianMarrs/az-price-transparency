@@ -27,7 +27,7 @@ with shoppable as (
                 filter (where price_type = 'negotiated_dollar'))::numeric, 2) as negotiated_median,
             count(distinct (payer_name, plan_name)) filter (where payer_name is not null) as plans
         from {{ ref('fct_prices') }}
-        where cms_shoppable_id is not null
+        where cms_shoppable_id is not null and source = 'hospital'
         group by ccn, service_key, cms_shoppable_id
     ) as f
     left join {{ ref('dim_services') }} as s using (service_key)
@@ -37,6 +37,7 @@ with shoppable as (
 services as (
     select ccn, count(distinct service_key) as services
     from {{ ref('fct_prices') }}
+    where source = 'hospital'
     group by ccn
 ),
 
