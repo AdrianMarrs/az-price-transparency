@@ -2,6 +2,41 @@
 
 Phase 3 puts precomputed answers in DynamoDB behind a Lambda API, with a React site, all defined in Terraform. Postgres stays the system of record; DynamoDB only holds what the site reads.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph laptop["Laptop (Docker, Dagster)"]
+        H[Hospital websites] -->|download| P[Python: find, download, parse]
+        P --> PG[(Postgres + dbt)]
+        PG -->|export changed items| X[export_dynamodb]
+    end
+    subgraph aws["AWS us-east-2 (Terraform: infra/)"]
+        S3D[(S3 data bucket<br/>raw/ 7 days, parquet/)]
+        DDB[(DynamoDB<br/>prices + by_service)]
+        L[Lambda API] --> DDB
+        L -->|services.json| S3D
+        GW[API Gateway HTTP API<br/>3 routes, 10 rps] --> L
+        CFA[CloudFront: API<br/>cached a day] --> GW
+        S3S[(S3 site bucket<br/>private)] --> CFS[CloudFront: site<br/>OAC, security headers]
+        S3T[(S3 Terraform state)]
+    end
+    P -->|copies| S3D
+    X --> DDB
+    X -->|clear cache| CFA
+    B[Browser] --> CFS
+    B -->|fetch JSON| CFA
+```
+
+| Piece | Where | Defined in |
+| --- | --- | --- |
+| Download, parse, warehouse, export | Laptop, scheduled by Dagster (Mondays) | `ingest/`, `warehouse/`, `serving/`, `orchestration/` |
+| Raw and Parquet copies, `services.json` | S3 data bucket | `infra/main/data_bucket.tf` |
+| Serving table | DynamoDB | `infra/main/dynamodb.tf` |
+| API | Lambda + API Gateway + CloudFront | `api/handler.py`, `infra/main/api.tf`, `cloudfront.tf` |
+| Site | S3 + CloudFront | `web/`, `infra/main/site.tf` |
+| Terraform state, deploy role | S3 (state bucket) | `infra/bootstrap/` |
+
 ## DynamoDB key design
 
 Written before any code, because in DynamoDB the keys are the queries: it fetches by key fast and does nothing else well (no joins, no ad-hoc filters, no text search). So the design starts from the questions the site asks.
@@ -172,3 +207,48 @@ Checked in headless Edge against the live API at desktop width and inside a 390 
 ## Blocked: GitHub Actions to AWS (OIDC)
 
 The deploy role is written (local branch `oidc-blocked`: `infra/bootstrap/github_oidc.tf` and `.github/workflows/deploy.yml`) but can't be applied: a service control policy in the AWS Organization this account belongs to denies every IAM OpenID Connect provider action, even listing them. It has to be changed from the organization's management account. Until then, Terraform is applied from a laptop.
+
+## IAM
+
+Every role can do only what its job needs; each permission is commented with why in the Terraform.
+
+| Who | Role | Can |
+| --- | --- | --- |
+| You, applying Terraform and running the pipeline from a laptop | `AccountFullAccessRole` via `aws login` | Everything in the account (subject to the organization's policies). Changes go through a saved plan that is read before `apply`. |
+| The API Lambda | `az-price-transparency-api` | `GetItem`, `Query`, `BatchGetItem` on the prices table and its `by_service` index; `GetObject` on `serving/services.json` only; write to its own log group. Nothing else: no writes, no other buckets. |
+| CloudFront (site) | none: a bucket policy | Read objects in the site bucket, only for requests signed by the site distribution (`AWS:SourceArn`); everyone else gets 403. |
+| API Gateway | none: a Lambda permission | Invoke the API Lambda, only from this API. |
+| GitHub Actions (blocked, see above) | `az-price-transparency-github-deploy` | Jobs in the repo's `production` environment (which accepts only `main`) may assume it. For now it can read and write `main/` in the state bucket and nothing more; each resource CI deploys will add its own statement. It can't touch `bootstrap/`, so CI can't change its own permissions. |
+
+Every bucket blocks public access, refuses non-HTTPS requests and has ACLs turned off.
+
+## Caching
+
+| Layer | What | Kept | Cleared by |
+| --- | --- | --- | --- |
+| CloudFront, API | Each answer, keyed by path + `q`, `payer`, `market` | 1 day (`s-maxage`) | The export, after any change (one `/*` invalidation) |
+| Browser, API | Each answer | 5 minutes (`max-age`) | Expiry |
+| Lambda | `services.json` | The life of a Lambda instance | A new instance (a deploy, or idle for a while) |
+| CloudFront and browser, site | Hashed files under `assets/` | 1 year (`immutable`) | Never needed: a new build has new names |
+| CloudFront and browser, site | `index.html` | Not cached | — |
+
+DynamoDB itself needs no cache in front of it (single-digit-millisecond reads); CloudFront is there for distance to the viewer and so the same answer is never computed twice.
+
+## Monthly cost
+
+Estimated from measured usage and AWS's published us-east-2 prices (October 2026). The bill itself is in the AWS console under Billing; the account is on the Free plan, so charges come out of its credits.
+
+| Service | Usage | Price | Cost |
+| --- | --- | --- | ---: |
+| DynamoDB storage | 1.9 GB table + 1.9 GB index | 25 GB free | $0 |
+| DynamoDB writes, first export (one-time) | ~4.3M write units | $0.625 per million | ~$2.70 |
+| DynamoDB writes, weekly export | Only changed items: ~0.4M units if a tenth change | $0.625 per million | ~$1/month |
+| DynamoDB reads | ~60 read units per uncached compare | $0.125 per million | ~$0 |
+| S3 | 52 MB data, 1.3 MB site, 79 KB state | $0.023 per GB-month | <$0.01 |
+| Lambda | Only cache misses; ~0.3 s at 1 GB each | 1M requests and 400K GB-s a month free | $0 |
+| API Gateway HTTP API | Only cache misses | $1.00 per million requests | ~$0 |
+| CloudFront (both) | All requests | 1 TB and 10M requests a month free | $0 |
+| CloudWatch Logs | A few KB per request, kept 14 days | $0.50 per GB ingested | ~$0 |
+| **Total** | | | **~$1/month** after the one-time ~$2.70 |
+
+The one cost that can grow is DynamoDB writes: if a week's files changed every item, the export would rewrite all of them (~$2.70 that week). The API's throttling (10 requests a second) and CloudFront's free tier bound what traffic can cost.
