@@ -16,11 +16,14 @@ the API searches (serving/services.json).
 """
 
 import argparse
+import csv
 import json
 import os
+import re
 import sys
 import time
 from decimal import Decimal
+from pathlib import Path
 
 import boto3
 import psycopg
@@ -29,6 +32,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://pt:pt@localhost:5432
 MAX_ITEM_BYTES = 350_000  # DynamoDB's limit is 400 KB; dbt tests the same bound
 CHUNK = 500
 SERVICES_KEY = "serving/services.json"  # in the data bucket; the API loads it for search
+SEARCH_TERMS_PATH = Path(__file__).resolve().parents[1] / "warehouse/seeds/service_search_terms.csv"
 
 STATE_SQL = """
 CREATE TABLE IF NOT EXISTS {state} (
@@ -144,15 +148,33 @@ def service_id(service_key: str) -> str:
     return service_key.replace("/", "-").lower()
 
 
+def load_search_terms(path: Path = SEARCH_TERMS_PATH) -> list[tuple[str, re.Pattern, str]]:
+    """(match_on, pattern, terms) rows from the reviewed seed."""
+    with path.open(newline="", encoding="utf-8") as f:
+        return [(r["match_on"], re.compile(r["pattern"], re.IGNORECASE), r["terms"])
+                for r in csv.DictReader(f)]  # fmt: skip
+
+
+def search_terms(code: str, text: str, rules: list[tuple[str, re.Pattern, str]]) -> str | None:
+    """Plain-English words for a service, so "knee mri" finds "MRI EXT LOWER JT"."""
+    words = []
+    for match_on, pattern, terms in rules:
+        if pattern.search(code if match_on == "code" else text):
+            words += [w for w in terms.split() if w not in words]
+    return " ".join(words) or None
+
+
 def services_list(conn: psycopg.Connection) -> list[dict]:
     """Every service at least one hospital prices, for search (served as services.json)."""
+    rules = load_search_terms()
     rows = conn.execute("""
         SELECT service_key, code, code_type, common_description, cms_shoppable_id,
                cms_description, hospitals
         FROM marts.dim_services WHERE hospitals > 0 ORDER BY service_key""").fetchall()
     return [compact({"id": service_id(key), "key": key, "code": code, "code_type": code_type,
                      "description": description, "cms_shoppable_id": shoppable,
-                     "cms_description": cms_description, "hospitals": hospitals})
+                     "cms_description": cms_description, "hospitals": hospitals,
+                     "terms": search_terms(code, f"{description} {cms_description or ''}", rules)})
             for key, code, code_type, description, shoppable, cms_description, hospitals in rows]  # fmt: skip
 
 

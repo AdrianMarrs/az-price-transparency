@@ -116,3 +116,14 @@ def test_dry_run_writes_nothing(conn):
     assert run(conn, table, dry_run=True)["put"] == 1
     assert table.puts == 0
     assert run(conn, table)["put"] == 1  # nothing was recorded as exported
+
+
+def test_search_terms_from_the_seed_cover_the_billing_language():
+    from serving.export_dynamodb import load_search_terms, search_terms
+
+    rules = load_search_terms()
+    assert "knee" in search_terms(
+        "73721", "MRI EXT LOWER JT WO CNT LT MRI scan of leg joint", rules
+    )
+    assert "doctor" in search_terms("99213", "OFFICE O/P EST LOW 20 MIN", rules)
+    assert search_terms("86003", "ALLERGEN SPECIFIC IGE", rules) is None

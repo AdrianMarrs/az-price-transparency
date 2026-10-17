@@ -62,7 +62,7 @@ resource "aws_lambda_function" "api" {
   handler          = "handler.handler"
   filename         = data.archive_file.api.output_path
   source_code_hash = data.archive_file.api.output_base64sha256
-  memory_size      = 256
+  memory_size      = 1024 # CPU scales with memory; decoding ~400 KB of items took 1.3 s at 256
   timeout          = 10
 
   environment {

@@ -116,6 +116,30 @@ uv run python -m serving.export_dynamodb --dry-run
 uv run python -m serving.export_dynamodb
 ```
 
+## API
+
+`api/handler.py` on Lambda (Python 3.13, ARM, 1024 MB) behind an API Gateway HTTP API (`infra/main/api.tf`), at the URL in `terraform -chdir=infra/main output api_url`:
+
+| Endpoint | Reads |
+| --- | --- |
+| `GET /services?q=knee mri` | `serving/services.json` in the data bucket, loaded once per cold start |
+| `GET /services/{id}/prices?payer=&market=` | `Query` on `by_service`, then `BatchGetItem` of the hospitals' profiles |
+| `GET /providers/{ccn}` | `GetItem` of the hospital's `PROFILE` |
+
+- **Least privilege:** the Lambda's role can read the table, its index and `services.json`, and write its own logs; nothing else.
+- **Cost guards:** only the three routes exist (anything else is a 404 from API Gateway without invoking the Lambda), and the stage is throttled to 10 requests a second (bursts of 20). The account allows 10 concurrent Lambdas.
+- **Plain-English search:** hospital and CMS descriptions use billing language ("MRI EXT LOWER JT"), so `warehouse/seeds/service_search_terms.csv` adds words people search with ("knee", "doctor visit") to matching services. 908 of 13,243 services get terms. It is a reviewed seed, like the payer patterns.
+
+Measured 2026-10-16 (compare = every hospital's knee MRI prices, 56 hospitals):
+
+| | Lambda time | Total from Tucson | Response |
+| --- | ---: | ---: | ---: |
+| 256 MB | 1,320 ms | 2.0 s | 616 KB |
+| 1024 MB | 265 ms | 1.0 s | 616 KB |
+| 1024 MB + gzip | ~270 ms | 0.63 s | 36 KB |
+
+CPU scales with Lambda memory, and decoding ~400 KB of DynamoDB items is CPU-bound (it used 125 MB either way). API Gateway HTTP APIs don't compress, so the handler gzips when the client accepts it. Search and profile requests take 2–30 ms in the Lambda. CloudFront caching comes next.
+
 ## Blocked: GitHub Actions to AWS (OIDC)
 
 The deploy role is written (local branch `oidc-blocked`: `infra/bootstrap/github_oidc.tf` and `.github/workflows/deploy.yml`) but can't be applied: a service control policy in the AWS Organization this account belongs to denies every IAM OpenID Connect provider action, even listing them. It has to be changed from the organization's management account. Until then, Terraform is applied from a laptop.

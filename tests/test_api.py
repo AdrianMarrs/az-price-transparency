@@ -107,3 +107,29 @@ def test_provider_rejects_a_malformed_ccn():
 def test_only_get_is_allowed():
     event = {"rawPath": "/services", "requestContext": {"http": {"method": "POST"}}}
     assert api.handler(event)["statusCode"] == 400
+
+
+def test_large_responses_are_gzipped_when_the_client_accepts_it():
+    import base64
+    import gzip
+
+    body = {"prices": [{"payer": "Aetna", "amount": Decimal("1421.79")}] * 200}
+    response = api.respond(200, body, gzip_ok=True)
+    assert response["headers"]["Content-Encoding"] == "gzip" and response["isBase64Encoded"]
+    decoded = json.loads(gzip.decompress(base64.b64decode(response["body"])))
+    assert decoded["prices"][0] == {"payer": "Aetna", "amount": 1421.79}
+    assert "Content-Encoding" not in api.respond(200, body, gzip_ok=False)["headers"]
+
+
+def test_small_or_unaccepted_responses_are_plain():
+    response = api.handler({"rawPath": "/providers/abc", "headers": {"accept-encoding": "gzip"}})
+    assert "Content-Encoding" not in response["headers"]
+    assert json.loads(response["body"])["error"]
+
+
+def test_search_uses_plain_english_terms(monkeypatch):
+    services = [{"id": "cpt-hcpcs:73721", "key": "CPT/HCPCS:73721", "code": "73721",
+                 "description": "MRI EXT LOWER JT WO CNT LT", "terms": "knee ankle hip joint mri",
+                 "hospitals": 56}]  # fmt: skip
+    monkeypatch.setattr(api, "_services", services)
+    assert [s["id"] for s in get("/services", q="knee mri")[1]["services"]] == ["cpt-hcpcs:73721"]

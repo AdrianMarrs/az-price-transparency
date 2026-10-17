@@ -12,6 +12,8 @@ deployment package is this one file. Prices are published standard charges, not 
 Key design: docs/03-cloud.md.
 """
 
+import base64
+import gzip
 import json
 import os
 import re
@@ -62,7 +64,8 @@ def search(q: str) -> list[dict]:
         raise BadRequest("q is required, e.g. /services?q=knee mri")
     hits = []
     for s in services():
-        text = " ".join(str(s.get(k, "")) for k in ("code", "description", "cms_description"))
+        fields = ("code", "description", "cms_description", "terms")  # terms: plain-English
+        text = " ".join(str(s.get(k, "")) for k in fields)
         if all(w in text.lower() for w in words):
             hits.append(s)
     hits.sort(key=lambda s: ("cms_shoppable_id" not in s, -s.get("hospitals", 0), s["id"]))
@@ -158,21 +161,28 @@ def to_json(value):
     raise TypeError(f"not JSON serializable: {type(value)}")
 
 
-def respond(status: int, body: dict) -> dict:
-    return {
-        "statusCode": status,
-        "headers": {"Content-Type": "application/json", "Cache-Control": "public, max-age=3600"
-                    if status == 200 else "no-store"},
-        "body": json.dumps(body, default=to_json),
-    }  # fmt: skip
+def respond(status: int, body: dict, gzip_ok: bool = False) -> dict:
+    """The HTTP response. Compressed when the client accepts gzip: API Gateway HTTP APIs
+    don't compress, and a compare response is several hundred KB of JSON."""
+    text = json.dumps(body, default=to_json, separators=(",", ":"))
+    headers = {"Content-Type": "application/json",
+               "Cache-Control": "public, max-age=3600" if status == 200 else "no-store",
+               "Vary": "Accept-Encoding"}  # fmt: skip
+    if gzip_ok and len(text) > 1024:
+        headers["Content-Encoding"] = "gzip"
+        body64 = base64.b64encode(gzip.compress(text.encode(), compresslevel=5)).decode()
+        return {"statusCode": status, "headers": headers, "body": body64, "isBase64Encoded": True}
+    return {"statusCode": status, "headers": headers, "body": text}
 
 
 def handler(event: dict, context=None) -> dict:
     """Entry point for an API Gateway HTTP API event (payload format 2.0)."""
     method = event.get("requestContext", {}).get("http", {}).get("method", "GET")
     path = event.get("rawPath", "/").rstrip("/") or "/"
+    gzip_ok = "gzip" in (event.get("headers") or {}).get("accept-encoding", "")
     try:
-        return respond(200, route(method, path, event.get("queryStringParameters") or {}))
+        result = route(method, path, event.get("queryStringParameters") or {})
+        return respond(200, result, gzip_ok)
     except BadRequest as e:
         return respond(400, {"error": str(e)})
     except NotFound as e:

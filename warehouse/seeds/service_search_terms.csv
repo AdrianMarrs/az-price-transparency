@@ -1,0 +1,23 @@
+match_on,pattern,terms,note
+text,lower (ext|extremity)? ?(jt|joint)|leg joint,knee ankle hip joint,"CPT 73721-73723: MRI of a lower-limb joint (knee, ankle or hip)"
+text,upper (ext|extremity)? ?(jt|joint)|arm joint,shoulder elbow wrist joint,"CPT 73221-73223: MRI of an upper-limb joint"
+text,spinal canal|spine|lumbar|cervical|thoracic|\bl-?spine|\bc-?spine,back spine neck,Spine imaging and procedures
+text,colonoscop|large bowel using an endoscope,colonoscopy,
+text,esophag.*(stomach|duodenum)|\begd\b|upper gi endoscopy,endoscopy egd upper gi,
+text,mammogra,mammogram breast,
+text,\bct\b|computed tomography|\bcat scan,ct scan,
+text,\bmri\b|\bmr\b|magnetic resonance,mri,
+text,ultrasound|sonogra|\bus\b|\becho,ultrasound,
+text,x-ray|\bxr\b|radiologic examination|\bx ray,x-ray xray,
+text,cataract,cataract eye,
+text,cesarean|c-section|c section,c-section cesarean birth delivery,
+text,vaginal delivery,childbirth birth delivery baby,
+text,hernia,hernia,
+text,gallbladder|cholecyst,gallbladder,
+text,appendec|appendix,appendix appendectomy,
+text,physical therapy|therapeutic exercise|neuromuscular reeducation,physical therapy pt,
+text,metabolic panel|blood count|\bcbc\b|lipid panel|hemoglobin a1c|thyroid stimulating,blood test lab,
+code,^(99202|99203|99204|99205|99211|99212|99213|99214|99215)$,doctor office visit,"Office or outpatient visits, new and established patients"
+code,^27447$,knee replacement,Total knee arthroplasty
+code,^27130$,hip replacement,Total hip arthroplasty
+code,^(469|470)$,knee hip joint replacement,"MS-DRG 469-470: major lower-limb joint replacement"
