@@ -47,3 +47,19 @@ jobs:
             terraform -chdir=$d init -backend=false -input=false
             terraform -chdir=$d validate
           done
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build  # type-checks, then builds

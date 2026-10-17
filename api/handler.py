@@ -170,7 +170,10 @@ def respond(status: int, body: dict, gzip_ok: bool = False) -> dict:
     text = json.dumps(body, default=to_json, separators=(",", ":"))
     headers = {"Content-Type": "application/json",
                "Cache-Control": CACHE_CONTROL if status == 200 else "no-store",
-               "Vary": "Accept-Encoding"}  # fmt: skip
+               "Vary": "Accept-Encoding",
+               # Public, read-only data. Sent on every response (not only when the request has
+               # an Origin header) because CloudFront caches one copy for every caller.
+               "Access-Control-Allow-Origin": "*"}  # fmt: skip
     if gzip_ok and len(text) > 1024:
         headers["Content-Encoding"] = "gzip"
         body64 = base64.b64encode(gzip.compress(text.encode(), compresslevel=5)).decode()

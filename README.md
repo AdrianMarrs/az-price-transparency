@@ -4,7 +4,7 @@ A free, open, auditable price lookup for Pima County, Arizona: named hospitals, 
 
 Behind it is a data pipeline that collects the prices hospitals and health insurers are required to publish, validates and normalizes them, and adds an AI query layer.
 
-**Status:** Phases 1-2 (hospital data, local). All 95 in-scope Arizona hospitals checked; 82 price files parsed into 14.6M prices, all loaded into Postgres; weekly pipeline in Dagster. Phase 3 (cloud) under way: data in S3 and DynamoDB, Lambda API behind CloudFront, all in Terraform.
+**Status:** Phases 1-2 (hospital data, local). All 95 in-scope Arizona hospitals checked; 82 price files parsed into 14.6M prices, all loaded into Postgres; weekly pipeline in Dagster. Phase 3 (cloud) under way: data in S3 and DynamoDB, Lambda API and React site behind CloudFront, all in Terraform.
 
 ## Findings so far
 
@@ -33,6 +33,7 @@ uv run pytest
 uv run dbt build --project-dir warehouse --profiles-dir warehouse
 $env:DAGSTER_HOME = "$PWD\.dagster_home"               # PowerShell
 uv run dagster dev -m orchestration.definitions        # pipeline UI at localhost:3000
+cd web; npm ci; npm run dev                            # the site at localhost:5173 (set VITE_API_URL, see web/.env.example)
 ```
 
 Design notes, one per phase: [setup](docs/00-setup.md), [hospital files](docs/01-hospitals.md), [every Arizona hospital](docs/02-arizona.md), [cloud](docs/03-cloud.md).

@@ -79,11 +79,9 @@ resource "aws_lambda_function" "api" {
 resource "aws_apigatewayv2_api" "api" {
   name          = "${var.project}-api"
   protocol_type = "HTTP"
-
-  cors_configuration {
-    allow_origins = ["*"] # public, read-only data; the site will be on another origin
-    allow_methods = ["GET"]
-  }
+  # No cors_configuration: API Gateway would then add CORS headers only for requests that
+  # carry an Origin header, and CloudFront could cache and serve a copy without them. The
+  # handler sends Access-Control-Allow-Origin on every response instead.
 }
 
 resource "aws_apigatewayv2_integration" "api" {

@@ -139,3 +139,8 @@ def test_answers_cache_a_day_at_cloudfront_and_minutes_in_browsers():
     cache = api.handler({"rawPath": "/providers/030006"})["headers"]["Cache-Control"]
     assert "s-maxage=86400" in cache and "max-age=300" in cache
     assert api.handler({"rawPath": "/providers/abc"})["headers"]["Cache-Control"] == "no-store"
+
+
+def test_every_response_allows_any_origin():
+    for path in ("/providers/030006", "/providers/abc", "/nowhere"):
+        assert api.handler({"rawPath": path})["headers"]["Access-Control-Allow-Origin"] == "*"
