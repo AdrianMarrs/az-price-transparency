@@ -9,3 +9,14 @@ variable "region" {
   type        = string
   default     = "us-east-2"
 }
+
+variable "alert_email" {
+  description = "Where budget alerts are emailed. Not committed: set TF_VAR_alert_email."
+  type        = string
+}
+
+variable "insurer_schedule_enabled" {
+  description = "Run the insurer pipeline monthly. Off until a manual run has been checked."
+  type        = bool
+  default     = false
+}

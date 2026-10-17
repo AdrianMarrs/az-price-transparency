@@ -1,0 +1,8 @@
+# Only what docker/*.Dockerfile copies is needed; keep data and caches out of the context.
+*
+!pyproject.toml
+!uv.lock
+!.python-version
+!ingest/
+!warehouse/seeds/hospital_npis.csv
+**/__pycache__
