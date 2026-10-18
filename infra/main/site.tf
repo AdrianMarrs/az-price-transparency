@@ -108,7 +108,7 @@ resource "aws_cloudfront_function" "site_router" {
   runtime = "cloudfront-js-2.0"
   comment = "Map page URLs to pre-rendered index.html files"
   publish = true
-  code    = file("${path.module}/site_router.js")
+  code    = templatefile("${path.module}/site_router.js", { apex = local.site_live ? var.site_domain : "" })
 }
 
 resource "aws_cloudfront_distribution" "site" {
@@ -117,6 +117,7 @@ resource "aws_cloudfront_distribution" "site" {
   default_root_object = "index.html"
   price_class         = "PriceClass_100"
   is_ipv6_enabled     = true
+  aliases             = local.site_live ? local.site_aliases : []
 
   origin {
     origin_id                = "site"
@@ -161,8 +162,12 @@ resource "aws_cloudfront_distribution" "site" {
     }
   }
 
+  # The CloudFront name until the site's own domain is live (domain.tf).
   viewer_certificate {
-    cloudfront_default_certificate = true
+    cloudfront_default_certificate = local.site_live ? null : true
+    acm_certificate_arn            = local.site_live ? aws_acm_certificate_validation.site[0].certificate_arn : null
+    ssl_support_method             = local.site_live ? "sni-only" : null
+    minimum_protocol_version       = local.site_live ? "TLSv1.2_2021" : null
   }
 }
 
@@ -172,7 +177,7 @@ output "site_bucket" {
 }
 
 output "site_url" {
-  value = "https://${aws_cloudfront_distribution.site.domain_name}"
+  value = "https://${local.site_live ? var.site_domain : aws_cloudfront_distribution.site.domain_name}"
 }
 
 output "site_distribution_id" {

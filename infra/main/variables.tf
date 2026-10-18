@@ -20,3 +20,15 @@ variable "insurer_schedule_enabled" {
   type        = bool
   default     = true
 }
+
+variable "site_domain" {
+  description = "The site's own domain (registered at Cloudflare, October 2026); null serves only the CloudFront name."
+  type        = string
+  default     = "clearhealthcareprices.com"
+}
+
+variable "site_domain_live" {
+  description = "Serve the site at site_domain. Set once its certificate is issued (see domain.tf)."
+  type        = bool
+  default     = true # certificate issued October 2026
+}
