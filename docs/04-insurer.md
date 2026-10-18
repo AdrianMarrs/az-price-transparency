@@ -144,3 +144,30 @@ The format now comes from the file's first bytes, not its name, and a stream tha
 `uv run python -m ingest.insurers.load --month 2026-10 --from-bucket` downloads the month's Parquet (124 files, 23 MB) and loads it: 4,851,647 rows into `raw.insurer_rates`.
 
 In the warehouse: 3,098,950 of those rows reach `fct_prices` (the codes some hospital also prices), covering 55 hospitals; 326,615 are distinct once the same contract repeated across networks is counted once. Cigna has rates for 76 Arizona hospitals in all. The other 21 are mostly behavioral health hospitals (Haven, Oasis, Quail Run, Palo Verde) and small rural ones (Page, Copper Queen, Cobre Valley): Cigna pays them per day by revenue code, or a percentage of billed charges (`CSTM-ALL`, "all services"), not per procedure. Those rates stay in `stg_insurer_rates`; there's no CPT or DRG price at the hospital to compare them with. The site's data is unchanged (the export's dry run would write nothing).
+
+### Rerun with the better NPI list
+
+Coverage (`insurer_hospital_coverage`) showed six hospitals that list Cigna in their own files but had no hospital NPI to match, so the NPI lookup was improved (street directions ignored, then a name search in the same city): 256 hospital NPIs for 93 hospitals, up from 237 for 83. Each file's status records a fingerprint of the NPI list it was parsed with (`npis_version`), so the next run redid all 124.
+
+**The first rerun hung for its whole 4-hour limit**, with no file finished (about $0.63 wasted). Computing the fingerprint read the NPI list with polars in the parent process, and on Linux the workers are forked: a child forked after polars has started its thread pool can deadlock in it. The tests use threads and Windows spawns processes, so neither caught it. Workers are now spawned, and a test checks the start method.
+
+| | First run | Rerun |
+| --- | --- | --- |
+| Wall time | 61 minutes | 44 minutes |
+| Estimated cost | $0.16 | $0.12 |
+| Rates kept | 4,851,647 | 5,681,292 |
+| Hospitals with Cigna rates | 76 | 83 |
+| Rows in `fct_prices` | 3,098,950 at 55 hospitals | 3,668,861 at 61 hospitals |
+
+**Coverage per hospital**, comparing the insurer's files with the hospital's own:
+
+| | Before | After |
+| --- | --- | --- |
+| In both | 51 | 56 |
+| Cigna's files only | 25 | 27 |
+| Hospital's file only | 6 | 1 |
+| Neither | 13 | 11 |
+
+The one left, Kingman Regional, lists Cigna and has two hospital NPIs, but neither appears in Cigna's files. The eleven in neither are the Exceptional Community micro-hospitals, behavioral health and state hospitals, and tribal facilities (Sage Memorial, Tuba City).
+
+**Outliers:** 11,487 rates (0.2%) are flagged against their peers: 7,954 over ten times the peer median and 3,533 under a tenth. They stay in `fct_prices` with a `rate_flag`; impossible rates (zero, negative, over 100%) are kept out.
