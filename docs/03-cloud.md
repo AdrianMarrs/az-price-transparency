@@ -1,6 +1,6 @@
 # 03 · Cloud and serving layer
 
-Phase 3 puts precomputed answers in DynamoDB behind a Lambda API, with a React site, all defined in Terraform. Postgres stays the system of record; DynamoDB only holds what the site reads.
+Phase 3 put precomputed answers in DynamoDB behind a Lambda API, with a React site, all defined in Terraform. In October 2026 the API and DynamoDB were replaced by static JSON files served with the site, the first step toward a version for every state at a few dollars a month. Postgres stays the system of record.
 
 ## Architecture
 
@@ -9,35 +9,54 @@ flowchart LR
     subgraph laptop["Laptop (Docker, Dagster)"]
         H[Hospital websites] -->|download| P[Python: find, download, parse]
         P --> PG[(Postgres + dbt)]
-        PG -->|export changed items| X[export_dynamodb]
+        PG -->|changed files| X[export_static]
     end
     subgraph aws["AWS us-east-2 (Terraform: infra/)"]
         S3D[(S3 data bucket<br/>raw/ 7 days, parquet/)]
-        DDB[(DynamoDB<br/>prices + by_service)]
-        L[Lambda API] --> DDB
-        L -->|services.json| S3D
-        GW[API Gateway HTTP API<br/>3 routes, 10 rps] --> L
-        CFA[CloudFront: API<br/>cached a day] --> GW
-        S3S[(S3 site bucket<br/>private)] --> CFS[CloudFront: site<br/>OAC, security headers]
+        S3S[(S3 site bucket, private<br/>pages + data/az/)] --> CFS[CloudFront: site<br/>OAC, security headers]
         S3T[(S3 Terraform state)]
     end
     P -->|copies| S3D
-    X --> DDB
-    X -->|clear cache| CFA
+    X --> S3S
+    X -->|clear /data/az/*| CFS
     B[Browser] --> CFS
-    B -->|fetch JSON| CFA
 ```
 
 | Piece | Where | Defined in |
 | --- | --- | --- |
 | Download, parse, warehouse, export | Laptop, scheduled by Dagster (Mondays) | `ingest/`, `warehouse/`, `serving/`, `orchestration/` |
-| Raw and Parquet copies, `services.json` | S3 data bucket | `infra/main/data_bucket.tf` |
-| Serving table | DynamoDB | `infra/main/dynamodb.tf` |
-| API | Lambda + API Gateway + CloudFront | `api/handler.py`, `infra/main/api.tf`, `cloudfront.tf` |
-| Site | S3 + CloudFront | `web/`, `infra/main/site.tf` |
+| Raw and Parquet copies | S3 data bucket | `infra/main/data_bucket.tf` |
+| Site and its data files | S3 + CloudFront, one domain | `web/`, `serving/export_static.py`, `infra/main/site.tf` |
 | Terraform state, deploy role | S3 (state bucket) | `infra/bootstrap/` |
 
+## Static data files
+
+Every answer the API gave is precomputed as a file, so the site is static end to end: `serving/export_static.py` reads the same dbt serving models and writes, gzip-compressed, under `data/<state>/` in the site bucket:
+
+| File | What | Arizona |
+| --- | --- | --- |
+| `services/<slug>.json` (`cpt-73721`, `drg-470`) | Every hospital's prices for one service: what `GET /services/{id}/prices` returned | 13,243 files |
+| `providers/<ccn>.json` | One hospital: score, rules, shoppable prices | 95 |
+| `search.json` | The service list with plain-English terms; the browser searches it | 1 (about 350 KB compressed) |
+
+- **Why:** reads were already all of the same precomputed answers, cached by CloudFront. Files cost S3 storage only (127 MB for Arizona, against 1.9 GB of DynamoDB items), need no Lambda or API Gateway, and scale to every state by adding a folder: a state's files are fetched only by that state's pages, so no file grows with the country.
+- **Same answers:** checked byte for byte (as parsed JSON) against the API for a service and a hospital before switching.
+- **Only what changed:** each file is gzipped without a timestamp, so equal data gives equal bytes, and S3's ETag (the MD5 of a single-part upload) tells whether a file changed. Unchanged files aren't uploaded, removed ones are deleted, and `/data/<state>/*` is cleared from CloudFront after any change. The first upload took 3 minutes with 16 threads.
+- **Missing files:** CloudFront answers an unknown path with the app shell (so pages that weren't pre-rendered work), so the site treats a non-JSON answer as not found.
+- **Dagster:** the `static_data_files` asset, in the `export_serving` job (Mondays 13:00). The site deploy never deletes `data/`.
+
+```
+$env:SITE_BUCKET = terraform -chdir=infra/main output -raw site_bucket
+$env:SITE_DISTRIBUTION_ID = terraform -chdir=infra/main output -raw site_distribution_id
+uv run python -m serving.export_static --dry-run
+uv run python -m serving.export_static
+```
+
+The retired API, DynamoDB table and API CloudFront were removed with Terraform (14 resources), after the site had run on the files.
+
 ## DynamoDB key design
+
+> **Retired in October 2026**, replaced by [static data files](#static-data-files). Kept as a record of the design.
 
 Written before any code, because in DynamoDB the keys are the queries: it fetches by key fast and does nothing else well (no joins, no ad-hoc filters, no text search). So the design starts from the questions the site asks.
 
@@ -137,9 +156,13 @@ uv run dagster dev -m orchestration.definitions
 
 ## DynamoDB table
 
+> **Retired in October 2026**, replaced by [static data files](#static-data-files). Kept as a record of the design.
+
 `az-price-transparency-prices` (`infra/main/dynamodb.tf`): on-demand, with the `by_service` index, as designed above. No point-in-time recovery (billed per GB; the export rebuilds it) and no deletion protection, so `terraform destroy` still removes everything. First export 2026-10-16: 338,792 items in 51 minutes (one writer thread; parallel writers would cut that if it matters), and an unchanged rerun wrote nothing in 2 seconds. Spot-checked against Postgres: Tucson Medical Center's outpatient Aetna knee MRI price matches, and 56 hospitals price a knee MRI in both.
 
 ## Export to DynamoDB
+
+> **Retired in October 2026**, replaced by [static data files](#static-data-files). Kept as a record of the design.
 
 - **dbt shapes the items** (`warehouse/models/serving/`): `srv_hospital_service_items` (one row per hospital × service: prices per payer × plan × setting × price type, with parent company, market, most common methodology, median amount and row count; plus the non-insurer gross, cash, min and max prices) and `srv_hospital_profiles` (one per in-scope hospital, including those with no usable prices). Each row carries its item as JSON built in a fixed order, its `content_hash` and its size. Postgres builds all 338K items in about five minutes.
 - **`serving/export_dynamodb.py` writes them:** new and changed items (by hash, against `raw.dynamodb_export_state`) in batches, deletes items no longer produced, and records each chunk only after DynamoDB has accepted it, so an interrupted export resumes and an unchanged rerun writes nothing. `--dry-run` counts without writing.
@@ -152,6 +175,8 @@ uv run python -m serving.export_dynamodb
 ```
 
 ## API
+
+> **Retired in October 2026**, replaced by [static data files](#static-data-files). Kept as a record of the design.
 
 `api/handler.py` on Lambda (Python 3.13, ARM, 1024 MB) behind an API Gateway HTTP API (`infra/main/api.tf`), at the URL in `terraform -chdir=infra/main output api_url`:
 
@@ -177,6 +202,8 @@ CPU scales with Lambda memory, and decoding ~400 KB of DynamoDB items is CPU-bou
 
 ## CloudFront
 
+> **Retired in October 2026**, replaced by [static data files](#static-data-files). Kept as a record of the design.
+
 A CloudFront distribution (`infra/main/cloudfront.tf`) sits in front of the API. Its cache key is the path plus `q`, `payer` and `market` only, so other query parameters can't bypass the cache. The handler sends `Cache-Control: public, max-age=300, s-maxage=86400`: CloudFront keeps an answer a day, browsers five minutes. After an export that changed anything, the exporter (and the Dagster asset) clears the cache with one `/*` invalidation when `CLOUDFRONT_DISTRIBUTION_ID` is set; tested once by hand: the invalidation completed and the next request was a miss.
 
 Measured 2026-10-16 from Tucson, medians of five requests, gzip on:
@@ -193,7 +220,7 @@ A hit never invokes the Lambda or reads DynamoDB, so repeat questions cost Cloud
 
 `web/`: Vite, React and TypeScript, one page (72 KB gzipped). Search for a service, pick one, and get every hospital's prices for it: insurer median and range, cash price, list price and the hospital's compliance badge, cheapest insurer median first. Filters for area (Pima County by default), setting, insurance type and insurer or plan; they work in the browser on one cached API response, so every filter choice is served by the same CloudFront hit. A row expands to every plan's price, the hospital's address, the rules it fails and a link to its own price file. The page state is in the URL, so a filtered view can be shared. "Published prices, not quotes" is under the table and in the footer.
 
-Hosting (`infra/main/site.tf`): a private bucket readable only by its CloudFront distribution (Origin Access Control; direct S3 requests get 403), with security headers on every response, including a content security policy that allows scripts and styles only from the site and data only from the API. `scripts/deploy_site.py` uploads the build: hashed files under `assets/` are cached for a year, `index.html` never, so only `index.html` is cleared from CloudFront and a deploy shows at once.
+Hosting (`infra/main/site.tf`): a private bucket readable only by its CloudFront distribution (Origin Access Control; direct S3 requests get 403), with security headers on every response, including a content security policy that allows scripts, styles and data only from the site itself. `scripts/deploy_site.py` uploads the build: hashed files under `assets/` are cached for a year, `index.html` never, so only `index.html` is cleared from CloudFront and a deploy shows at once.
 
 ```
 cd web; npm ci; npm test; npm run build; cd ..
@@ -215,9 +242,7 @@ Every role can do only what its job needs; each permission is commented with why
 | Who | Role | Can |
 | --- | --- | --- |
 | You, applying Terraform and running the pipeline from a laptop | `AccountFullAccessRole` via `aws login` | Everything in the account (subject to the organization's policies). Changes go through a saved plan that is read before `apply`. |
-| The API Lambda | `az-price-transparency-api` | `GetItem`, `Query`, `BatchGetItem` on the prices table and its `by_service` index; `GetObject` on `serving/services.json` only; write to its own log group. Nothing else: no writes, no other buckets. |
 | CloudFront (site) | none: a bucket policy | Read objects in the site bucket, only for requests signed by the site distribution (`AWS:SourceArn`); everyone else gets 403. |
-| API Gateway | none: a Lambda permission | Invoke the API Lambda, only from this API. |
 | GitHub Actions (blocked, see above) | `az-price-transparency-github-deploy` | Jobs in the repo's `production` environment (which accepts only `main`) may assume it. For now it can read and write `main/` in the state bucket and nothing more; each resource CI deploys will add its own statement. It can't touch `bootstrap/`, so CI can't change its own permissions. |
 
 Every bucket blocks public access, refuses non-HTTPS requests and has ACLs turned off.
@@ -226,13 +251,12 @@ Every bucket blocks public access, refuses non-HTTPS requests and has ACLs turne
 
 | Layer | What | Kept | Cleared by |
 | --- | --- | --- | --- |
-| CloudFront, API | Each answer, keyed by path + `q`, `payer`, `market` | 1 day (`s-maxage`) | The export, after any change (one `/*` invalidation) |
-| Browser, API | Each answer | 5 minutes (`max-age`) | Expiry |
-| Lambda | `services.json` | The life of a Lambda instance | A new instance (a deploy, or idle for a while) |
+| CloudFront, data files | Each file under `data/` | 1 day (`s-maxage`) | The export, after any change (one `/data/<state>/*` invalidation) |
+| Browser, data files | Each file | 5 minutes (`max-age`) | Expiry |
 | CloudFront and browser, site | Hashed files under `assets/` | 1 year (`immutable`) | Never needed: a new build has new names |
 | CloudFront and browser, site | `index.html` | Not cached | — |
 
-DynamoDB itself needs no cache in front of it (single-digit-millisecond reads); CloudFront is there for distance to the viewer and so the same answer is never computed twice.
+CloudFront is there for distance to the viewer; nothing is computed per request.
 
 ## Monthly cost
 
@@ -240,15 +264,10 @@ Estimated from measured usage and AWS's published us-east-2 prices (October 2026
 
 | Service | Usage | Price | Cost |
 | --- | --- | --- | ---: |
-| DynamoDB storage | 1.9 GB table + 1.9 GB index | 25 GB free | $0 |
-| DynamoDB writes, first export (one-time) | ~4.3M write units | $0.625 per million | ~$2.70 |
-| DynamoDB writes, weekly export | Only changed items: ~0.4M units if a tenth change | $0.625 per million | ~$1/month |
-| DynamoDB reads | ~60 read units per uncached compare | $0.125 per million | ~$0 |
-| S3 | 52 MB data, 1.3 MB site, 79 KB state | $0.023 per GB-month | <$0.01 |
-| Lambda | Only cache misses; ~0.3 s at 1 GB each | 1M requests and 400K GB-s a month free | $0 |
-| API Gateway HTTP API | Only cache misses | $1.00 per million requests | ~$0 |
-| CloudFront (both) | All requests | 1 TB and 10M requests a month free | $0 |
-| CloudWatch Logs | A few KB per request, kept 14 days | $0.50 per GB ingested | ~$0 |
-| **Total** | | | **~$1/month** after the one-time ~$2.70 |
+| S3 storage | 127 MB of data files, the site, the data bucket's Parquet and 7 days of raw files | $0.023 per GB-month | ~$0.01 |
+| S3 requests, weekly export | Only changed files; all 13,339 if everything changed | $0.005 per 1,000 PUTs | <$0.07 a week |
+| CloudFront | All requests | 1 TB and 10M requests a month free | $0 |
+| ECS Fargate, monthly insurer run | ~45 minutes on 4 vCPU / 8 GB ARM | per vCPU- and GB-hour | ~$0.12 a run |
+| **Total** | | | **well under $1/month** |
 
-The one cost that can grow is DynamoDB writes: if a week's files changed every item, the export would rewrite all of them (~$2.70 that week). The API's throttling (10 requests a second) and CloudFront's free tier bound what traffic can cost.
+Retiring DynamoDB and the API removed the one cost that grew with the data: DynamoDB writes, about $2.70 for a full Arizona rewrite, which at every state would have been roughly $150, plus about $30 a month of storage.

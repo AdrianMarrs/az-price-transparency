@@ -90,7 +90,7 @@ resource "aws_cloudfront_response_headers_policy" "site" {
     content_security_policy {
       content_security_policy = join("; ", [
         "default-src 'self'",
-        "connect-src 'self' https://${aws_cloudfront_distribution.api.domain_name}",
+        "connect-src 'self'", # the data files are same-origin (serving/export_static.py)
         "img-src 'self' data:",
         "style-src 'self'",
         "script-src 'self'",

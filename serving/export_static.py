@@ -34,7 +34,7 @@ from pathlib import Path
 import boto3
 import psycopg
 
-from serving.export_dynamodb import DATABASE_URL, compact, services_list
+from serving.services import DATABASE_URL, compact, services_list
 
 STATE = "az"
 NOTE = "Published hospital standard charges, not a quote. Check with your insurer and hospital."

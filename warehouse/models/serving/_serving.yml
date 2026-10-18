@@ -1,7 +1,8 @@
 version: 2
 
-# DynamoDB items, one row each, exported by serving/export_dynamodb.py.
-# DynamoDB's item limit is 400 KB; the export refuses anything over 350 KB.
+# One row per hospital x service and per hospital, written as static files by
+# serving/export_static.py. Built for DynamoDB (400 KB items), whose size bound still keeps
+# each hospital's part of a service file small.
 
 models:
   - name: srv_hospital_service_items
