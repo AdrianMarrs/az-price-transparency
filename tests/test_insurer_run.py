@@ -73,12 +73,23 @@ def test_status_pages_through_query_results():
     assert sorted(status.all()) == [f"f{i}" for i in range(5)]
 
 
+pools: list[dict] = []
+
+
+def threads_for_processes(**kwargs):
+    """Stands in for ProcessPoolExecutor (threads share the test's patches); records how
+    the pool was asked for."""
+    pools.append(kwargs)
+    return ThreadPoolExecutor(max_workers=kwargs["max_workers"])
+
+
 @pytest.fixture
 def runner(monkeypatch, tmp_path):
     """Runs against the fixture plus a missing file, sharing one fake status table.
     Returns (go, statuses, table)."""
     missing = (tmp_path / "2026-10-01_fixture-insurer_gone_in-network-rates.json.gz").as_posix()
-    monkeypatch.setattr(run, "ProcessPoolExecutor", ThreadPoolExecutor)
+    pools.clear()
+    monkeypatch.setattr(run, "ProcessPoolExecutor", threads_for_processes)
     monkeypatch.setattr(run, "current_toc", lambda insurer: ("toc", "2026-10"))
     monkeypatch.setattr(run, "load_toc", lambda url: toc(FIXTURE.as_posix(), missing))
     monkeypatch.setattr("ingest.insurers.tic.RAW_DIR", tmp_path / "raw")
@@ -132,3 +143,10 @@ def test_npis_version_ignores_order_and_sees_changes():
     a = run.npis_version({1: "030006", 2: "030011"})
     assert a == run.npis_version({2: "030011", 1: "030006"})
     assert a != run.npis_version({1: "030006", 2: "030012"})
+
+
+def test_workers_are_spawned_not_forked(runner):
+    # Forked after the NPI list is read with polars, workers deadlocked (October 2026 rerun).
+    go, _, _ = runner
+    go()
+    assert [p["mp_context"].get_start_method() for p in pools] == ["spawn"]

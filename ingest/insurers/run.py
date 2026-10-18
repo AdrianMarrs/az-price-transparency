@@ -22,6 +22,7 @@ Without RUNS_TABLE (a laptop), status is kept in memory only.
 
 import argparse
 import hashlib
+import multiprocessing
 import os
 import sys
 import time
@@ -172,7 +173,10 @@ def run(insurer: str, networks: list[str] | None, workers: int, skip_failed: boo
     print(f"{insurer} {month}: {len(files)} files, {len(files) - len(todo)} already done "
           f"or skipped, {len(todo)} to run on {workers} workers")  # fmt: skip
     done = failed = 0
-    with ProcessPoolExecutor(max_workers=workers) as pool:
+    # Spawned, not forked (Linux's default): this process has already used polars (the NPI
+    # list), and a child forked after polars has started its thread pool can deadlock in it.
+    # The October 2026 rerun did: every worker hung on its first file until the task timed out.
+    with ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context("spawn")) as pool:
         futures = {}
         for name, url in todo.items():
             status.file(name, "queued", queued_at=now())
