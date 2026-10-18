@@ -38,6 +38,14 @@ export const RULES: Record<string, { title: string; why: string }> = {
     title: "The file was updated in the last year",
     why: "Hospitals must update the file at least once a year.",
   },
+  shoppable_cash_prices: {
+    title: "It gives a cash price for its shoppable services",
+    why: "The rule requires a discounted cash price for each service. Many files list only insurer prices for a procedure; we expect a cash price for at least 90% of the shoppable services the file prices.",
+  },
+  shoppable_list_prices: {
+    title: "It gives a list price for its shoppable services",
+    why: "The rule also requires the gross charge, the hospital's full list price. We expect one for at least 90% of the shoppable services the file prices.",
+  },
 };
 
 export function failedRules(failed: string | undefined): string[] {

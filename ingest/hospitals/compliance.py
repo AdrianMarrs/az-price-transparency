@@ -35,9 +35,15 @@ RULES = {
     "payer_prices_present": "the file includes payer-specific negotiated charges",
     "mostly_dollar_prices": "at least half of its unbundled insurer prices are dollar amounts",
     "updated_within_12_months": "the file was updated in the last 12 months",
+    "shoppable_cash_prices": "at least 90% of the shoppable services it prices have a cash price",
+    "shoppable_list_prices": "at least 90% of the shoppable services it prices have a list price",
 }
 CONTENT_RULES = list(RULES)[3:]
 READABLE = {"parsed", "partly_parsed", "no_service_codes"}
+# The rule asks for a cash and a gross (list) price for every item and service "as
+# applicable". Many files give a procedure only insurer prices (it's charged as separate
+# items), so a few gaps are allowed; most of the shoppable services they price aren't.
+STANDARD_CHARGE_SHARE = 0.9
 
 # CMS template v2/v3 header fields. CSV names the attestation by its full text.
 REQUIRED_HEADER = {
@@ -90,6 +96,7 @@ def check_hospital(source: dict, download: dict | None, parse: dict | None, toda
     dollar = int(parse.get("file_payer_dollar") or 0)
     unbundled = prices - int(parse.get("file_payer_bundled") or 0)
     updated = date.fromisoformat(parse["last_updated_on"]) if parse.get("last_updated_on") else None
+    shoppable = int(parse.get("shoppable_services") or 0)
     checks += [
         ("price_file_parses", True, parse["outcome"]),
         ("version_stated", bool(parse.get("version")), parse.get("version") or "missing"),
@@ -102,8 +109,39 @@ def check_hospital(source: dict, download: dict | None, parse: dict | None, toda
         ("updated_within_12_months",
          updated is not None and updated >= today - timedelta(days=365),
          str(updated) if updated else "no valid last_updated_on date"),
+        standard_charge_check("shoppable_cash_prices", shoppable,
+                              int(parse.get("shoppable_with_cash") or 0), "cash price"),
+        standard_charge_check("shoppable_list_prices", shoppable,
+                              int(parse.get("shoppable_with_gross") or 0), "list price"),
     ]  # fmt: skip
     return checks
+
+
+def standard_charge_check(rule: str, services: int, priced: int, what: str) -> tuple:
+    """(rule, passed, detail) for the share of shoppable services with a cash or list price;
+    None when the file prices no shoppable services."""
+    if services == 0:
+        return rule, None, "no shoppable services priced"
+    return (rule, priced / services >= STANDARD_CHARGE_SHARE,
+            f"{priced} of {services} shoppable services have a {what}")  # fmt: skip
+
+
+def shoppable_standard_charges(conn: psycopg.Connection) -> dict[str, dict]:
+    """Per hospital: how many CMS shoppable services its file prices, and how many of those
+    have a cash price and a list (gross) price."""
+    if conn.execute("SELECT to_regclass('raw.hospital_charges')").fetchone()[0] is None:
+        return {}
+    rows = conn.execute(
+        """SELECT ccn, count(*), count(*) FILTER (WHERE cash), count(*) FILTER (WHERE gross)
+           FROM (SELECT ccn, code_type, code,
+                        bool_or(price_type = 'discounted_cash' AND amount IS NOT NULL) AS cash,
+                        bool_or(price_type = 'gross' AND amount IS NOT NULL) AS gross
+                 FROM raw.hospital_charges WHERE cms_shoppable_id IS NOT NULL
+                 GROUP BY ccn, code_type, code) AS s
+           GROUP BY ccn"""
+    ).fetchall()
+    return {ccn: {"shoppable_services": n, "shoppable_with_cash": cash, "shoppable_with_gross": gross}
+            for ccn, n, cash, gross in rows}  # fmt: skip
 
 
 def latest_downloads(conn: psycopg.Connection) -> dict[str, dict]:
@@ -128,6 +166,9 @@ def main() -> None:
 
     with psycopg.connect(DATABASE_URL, autocommit=True) as conn:
         downloads = latest_downloads(conn)
+        for ccn, counts in shoppable_standard_charges(conn).items():
+            if ccn in report:
+                report[ccn] = report[ccn] | counts
         rows = [
             (ccn, rule, passed, detail, checked_at)
             for ccn in hospitals["ccn"]

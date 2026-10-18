@@ -176,7 +176,9 @@ def run(insurer: str, networks: list[str] | None, workers: int, skip_failed: boo
     # Spawned, not forked (Linux's default): this process has already used polars (the NPI
     # list), and a child forked after polars has started its thread pool can deadlock in it.
     # The October 2026 rerun did: every worker hung on its first file until the task timed out.
-    with ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context("spawn")) as pool:
+    with ProcessPoolExecutor(
+        max_workers=workers, mp_context=multiprocessing.get_context("spawn")
+    ) as pool:
         futures = {}
         for name, url in todo.items():
             status.file(name, "queued", queued_at=now())

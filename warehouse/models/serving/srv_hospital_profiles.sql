@@ -28,6 +28,8 @@ with shoppable as (
             count(distinct (payer_name, plan_name)) filter (where payer_name is not null) as plans
         from {{ ref('fct_prices') }}
         where cms_shoppable_id is not null and source = 'hospital'
+          -- $1-or-less insurer prices are case-rate placeholders, not prices (web/app/lib/summary.ts)
+          and not (price_type = 'negotiated_dollar' and coalesce(amount <= 1, false))
         group by ccn, service_key, cms_shoppable_id
     ) as f
     left join {{ ref('dim_services') }} as s using (service_key)

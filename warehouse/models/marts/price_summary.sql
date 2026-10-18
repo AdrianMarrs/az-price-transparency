@@ -24,6 +24,8 @@ with prices as (
     where f.source = 'hospital'
       and f.price_type in ('negotiated_dollar', 'discounted_cash', 'gross')
       and coalesce(p.market, '') not in ('self_pay')
+      -- $1-or-less insurer prices are case-rate placeholders, not prices
+      and not (f.price_type = 'negotiated_dollar' and coalesce(f.amount <= 1, false))
 ),
 
 summarized as (

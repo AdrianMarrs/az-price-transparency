@@ -9,7 +9,8 @@ CSV_HEADER = ("hospital_name;last_updated_on;version;location_name;hospital_addr
 GOOD_PARSE = {
     "outcome": "parsed", "version": "3.0.0", "last_updated_on": "2026-04-30",
     "header_fields": CSV_HEADER, "file_payer_prices": "100", "file_payer_dollar": "80",
-    "file_payer_bundled": "0",
+    "file_payer_bundled": "0", "shoppable_services": 50, "shoppable_with_cash": 50,
+    "shoppable_with_gross": 46,
 }  # fmt: skip
 FOUND = {"status": "found", "mrf_url": "https://x.org/prices.csv"}
 DOWNLOADED = {"outcome": "downloaded", "error": None}
@@ -87,3 +88,19 @@ def test_a_hand_download_fails_the_download_rule_but_its_contents_are_checked():
     v = verdicts(FOUND, manual, GOOD_PARSE)
     assert v["price_file_downloads"] is False
     assert v["payer_prices_present"] is True
+
+
+def test_cash_and_list_prices_are_needed_for_most_shoppable_services():
+    # HonorHealth John C. Lincoln: insurer prices only for 33 of its 74 shoppable services.
+    v = verdicts(FOUND, DOWNLOADED, GOOD_PARSE | {"shoppable_services": 74,
+                                                  "shoppable_with_cash": 41,
+                                                  "shoppable_with_gross": 41})  # fmt: skip
+    assert v["shoppable_cash_prices"] is False
+    assert v["shoppable_list_prices"] is False
+    assert v["payer_prices_present"] is True
+
+
+def test_no_shoppable_services_leaves_the_standard_charge_rules_unchecked():
+    v = verdicts(FOUND, DOWNLOADED, GOOD_PARSE | {"shoppable_services": 0})
+    assert v["shoppable_cash_prices"] is None
+    assert v["shoppable_list_prices"] is None

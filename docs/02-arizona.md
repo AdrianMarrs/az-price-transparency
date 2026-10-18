@@ -36,17 +36,18 @@ Notable: East Valley ER & Hospital's `cms-hpt.txt` names a different hospital, i
 
 ## Compliance
 
-Nine rules per hospital ([`ingest/hospitals/compliance.py`](../ingest/hospitals/compliance.py)), scored by dbt in `marts.hospital_compliance_scores`. Highlights:
+Eleven rules per hospital ([`ingest/hospitals/compliance.py`](../ingest/hospitals/compliance.py)), scored by dbt in `marts.hospital_compliance_scores`. Highlights:
 
 - **No insurer prices at all:** the three Carondelet hospitals (St. Joseph's, St. Mary's, Holy Cross), Abrazo Scottsdale and the four Exceptional Community Hospitals.
 - **Mostly percentages or formulas, not dollars:** six hospitals, as low as 3% in dollars (White Mountain Regional).
+- **No cash or list price for most procedures** (added October 2026): only 16 of the 65 hospitals whose files price CMS's shoppable services give a cash price for at least 90% of them, and 18 a list price. Many give a procedure only insurer prices, because it's charged as separate items; 11 give no cash price for any. John C. Lincoln, for one, has both for 41 of its 74. These two rules took the number of hospitals at 100% from 39 to 15.
 - **CMS's own validator** (`@cmsgov/hpt-validator-cli` 1.10.8) agreed on five spot-checked files. It checks format, not substance: it passes a file with no insurer prices. It also corrected one of our findings: CMS accepts M/D/YYYY dates in CSV files.
 
 ## Insurer names
 
 Statewide files use 820 insurer names. `dim_payer_plans` maps each payer + plan to a parent company (exact alias, else an ordered pattern) and a market (from patterns on payer and plan text, so a "Work Comp" plan under a commercial payer counts as workers' comp). Coverage: parent company for 90% of price rows, market for 80%. A dbt unit test pins the precedence rules.
 
-### The nine rules
+### The eleven rules
 
 | Rule | Passes when |
 | --- | --- |
@@ -59,6 +60,8 @@ Statewide files use 820 insurer names. `dim_payer_plans` maps each payer + plan 
 | `payer_prices_present` | The whole file (every code) has at least one payer-specific negotiated charge |
 | `mostly_dollar_prices` | At least half of unbundled insurer prices are dollar amounts |
 | `updated_within_12_months` | `last_updated_on` is within the last year |
+| `shoppable_cash_prices` | At least 90% of the CMS shoppable services the file prices have a discounted cash price |
+| `shoppable_list_prices` | At least 90% of them have a gross charge (list price) |
 
 A rule that can't be checked (no file obtained) is recorded as not checked, not as a pass, and `score_pct` counts only checked rules alongside how many that was.
 

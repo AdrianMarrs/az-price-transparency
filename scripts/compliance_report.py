@@ -26,6 +26,8 @@ RULE_NAMES = {
     "payer_prices_present": "Payer-specific negotiated charges present",
     "mostly_dollar_prices": "At least half of unbundled insurer prices in dollars",
     "updated_within_12_months": "Updated in the last 12 months",
+    "shoppable_cash_prices": "Cash price for 90%+ of its shoppable services",
+    "shoppable_list_prices": "List price for 90%+ of its shoppable services",
 }
 
 
