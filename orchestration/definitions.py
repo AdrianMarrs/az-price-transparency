@@ -21,14 +21,14 @@ from datetime import date, timedelta
 from pathlib import Path
 
 import dagster as dg
+import duckdb
 import polars as pl
-import psycopg
 import redis
 from dagster_dbt import DbtCliResource, DbtProject, dbt_assets
 
 from ingest.hospitals import compliance, find_sources, hospital_list, payer_plans
 from ingest.hospitals.download import download_hospitals
-from ingest.hospitals.load import DATABASE_URL, create_table, load_parsed, state_of
+from ingest.hospitals.load import load_parsed, state_of
 from ingest.hospitals.parse import (
     PARSED_DIR,
     load_shoppable,
@@ -41,8 +41,8 @@ from serving import export_static
 ROOT = Path(__file__).resolve().parents[1]
 HOSPITALS_SEED = ROOT / "warehouse" / "seeds" / "hospitals.csv"
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-# Counties whose prices are loaded into Postgres ("*" = all; every hospital is parsed either
-# way). Statewide adds several GB, so a small machine can set e.g. LOAD_COUNTIES=PIMA.
+# Counties whose prices are written to the lake ("*" = all; every hospital is parsed either
+# way). A small machine can set e.g. LOAD_COUNTIES=PIMA to build a smaller warehouse.
 LOAD_COUNTIES = {c.strip().upper() for c in os.environ.get("LOAD_COUNTIES", "*").split(",")}
 # Asset checks: flag a hospital whose parsed row count moves more than this between runs.
 ROW_SWING = 0.30
@@ -173,7 +173,7 @@ def parsed_file_is_current(context: dg.AssetCheckExecutionContext) -> dg.AssetCh
     group_name="hospitals",
     partitions_def=hospital_partitions,
     deps=[parsed_prices],
-    description="Prices loaded into Postgres (counties in LOAD_COUNTIES; default all)",
+    description="Prices in the Parquet lake (counties in LOAD_COUNTIES; default all)",
 )
 def warehouse_prices(context: dg.AssetExecutionContext) -> dg.MaterializeResult:
     ccn = context.partition_key
@@ -181,9 +181,7 @@ def warehouse_prices(context: dg.AssetExecutionContext) -> dg.MaterializeResult:
     wanted = "*" in LOAD_COUNTIES or county in LOAD_COUNTIES
     if not wanted or not (PARSED_DIR / f"{ccn}.parquet").exists():
         return dg.MaterializeResult(metadata={"loaded": False, "county": county})
-    with psycopg.connect(DATABASE_URL, autocommit=True) as conn:
-        create_table(conn)
-        df = load_parsed(conn, ccn, state_of(ccn))
+    df = load_parsed(ccn, state_of(ccn))
     return dg.MaterializeResult(metadata={"loaded": True, "rows": df.height})
 
 
@@ -199,12 +197,9 @@ def payer_plan_names() -> None:
 @dg.asset(key=["raw", "compliance_checks"], group_name="statewide",
           deps=[hospital_sources, parsed_prices])  # fmt: skip
 def compliance_checks() -> dg.MaterializeResult:
-    compliance.main()
-    with psycopg.connect(DATABASE_URL) as conn:
-        passed, failed = conn.execute(
-            "SELECT count(*) FILTER (WHERE passed), count(*) FILTER (WHERE NOT passed) "
-            "FROM raw.compliance_checks"
-        ).fetchone()
+    checks = compliance.main()
+    passed = checks.filter(pl.col("passed")).height
+    failed = checks.filter(~pl.col("passed")).height
     return dg.MaterializeResult(metadata={"passed": passed, "failed": failed})
 
 
@@ -224,14 +219,14 @@ def warehouse_models(context: dg.AssetExecutionContext, dbt: DbtCliResource):
 
 @dg.asset(
     group_name="serving",
-    deps=[dg.AssetKey("srv_hospital_service_items"), dg.AssetKey("srv_hospital_profiles")],
+    deps=[dg.AssetKey("srv_service_prices"), dg.AssetKey("srv_hospital_profiles")],
     description="The site's data as static JSON files (SITE_BUCKET); changed ones uploaded",
 )
 def static_data_files(context: dg.AssetExecutionContext) -> dg.MaterializeResult:
     bucket = os.environ.get("SITE_BUCKET")
     if not bucket:
         raise dg.Failure("SITE_BUCKET is not set (terraform -chdir=infra/main output site_bucket)")
-    with psycopg.connect(DATABASE_URL, autocommit=True) as conn:
+    with duckdb.connect(export_static.WAREHOUSE, read_only=True) as conn:
         counts = export_static.sync(export_static.build(conn), bucket)
     distribution = os.environ.get("SITE_DISTRIBUTION_ID")
     if distribution and (counts["put"] or counts["deleted"]):  # new prices: clear the cache

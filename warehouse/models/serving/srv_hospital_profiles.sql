@@ -1,4 +1,4 @@
--- One row per in-scope hospital: its DynamoDB PROFILE item (docs/03-cloud.md). Every
+-- One row per in-scope hospital: its data file, data/<state>/providers/<ccn>.json. Every
 -- hospital gets one, including those with no usable prices, so the site can say why.
 --
 -- shoppable: for each of the CMS 70 shoppable services the hospital prices, the median
@@ -7,24 +7,24 @@
 with shoppable as (
     select
         f.ccn,
-        json_agg(json_build_object(
+        to_json(list(json_object(
             'service_key', f.service_key,
             'cms_shoppable_id', f.cms_shoppable_id,
             'description', s.cms_description,
             'cash', f.cash,
             'negotiated_median', f.negotiated_median,
             'plans', f.plans
-        ) order by f.cms_shoppable_id, f.service_key) as shoppable,
+        ) order by f.cms_shoppable_id, f.service_key)) as shoppable,
         count(*) as shoppable_services
     from (
         select
             ccn,
             service_key,
             cms_shoppable_id,
-            round((percentile_cont(0.5) within group (order by amount)
-                filter (where price_type = 'discounted_cash'))::numeric, 2) as cash,
-            round((percentile_cont(0.5) within group (order by amount)
-                filter (where price_type = 'negotiated_dollar'))::numeric, 2) as negotiated_median,
+            round(percentile_cont(0.5) within group (order by amount)
+                filter (where price_type = 'discounted_cash'), 2)::double as cash,
+            round(percentile_cont(0.5) within group (order by amount)
+                filter (where price_type = 'negotiated_dollar'), 2)::double as negotiated_median,
             count(distinct (payer_name, plan_name)) filter (where payer_name is not null) as plans
         from {{ ref('fct_prices') }}
         where cms_shoppable_id is not null and source = 'hospital'
@@ -48,7 +48,8 @@ final as (
         'HOSPITAL#' || h.ccn as pk,
         'PROFILE' as sk,
         h.ccn,
-        json_build_object(
+        h.state,
+        json_object(
             'ccn', h.ccn,
             'name', h.name,
             'address', h.address,
@@ -65,7 +66,7 @@ final as (
             'failed_rules', c.failed_rules,
             'services', coalesce(v.services, 0),
             'shoppable_services', coalesce(sh.shoppable_services, 0),
-            'shoppable', coalesce(sh.shoppable, '[]')
+            'shoppable', coalesce(sh.shoppable, '[]'::json)
         ) as item
     from {{ ref('dim_hospitals') }} as h
     inner join {{ ref('hospital_compliance_scores') }} as c using (ccn)
@@ -79,7 +80,8 @@ select
     pk,
     sk,
     ccn,
-    item::text as item,
-    md5(item::text) as content_hash,
-    octet_length(item::text) as item_bytes
+    state,  -- which folder its file goes in (data/<state>/); not in the file itself
+    item::varchar as item,
+    md5(item::varchar) as content_hash,
+    strlen(item::varchar) as item_bytes
 from final

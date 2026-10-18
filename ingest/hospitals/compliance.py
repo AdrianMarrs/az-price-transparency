@@ -4,26 +4,26 @@ Usage:
     uv run python -m ingest.hospitals.compliance
 
 Reads the discovery results (warehouse/seeds/hospital_sources.csv), the latest download
-attempt per hospital (raw.source_files) and the parse report (data/parsed/parse_report.csv),
-and writes one row per hospital x rule to raw.compliance_checks. passed is null when a
+attempt per hospital (raw.source_files), the parse report (data/parsed/parse_report.csv) and
+the loaded prices (raw.hospital_charges), all in the Parquet lake but the seed and report,
+and writes one row per hospital x rule to raw.compliance_checks
+(raw/compliance_checks/checks.parquet, rewritten each run). passed is null when a
 rule can't be checked, e.g. content rules when no file could be obtained.
 
 These are our readings of 45 CFR 180.50 and the CMS template, not CMS's own validator.
 """
 
-import os
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import polars as pl
-import psycopg
 
-from ingest.hospitals.download import SCHEMA_SQL
+from ingest import lake
+from ingest.hospitals import source_log
 
 SOURCES_PATH = Path("warehouse/seeds/hospital_sources.csv")
 HOSPITALS_PATH = Path("warehouse/seeds/hospitals.csv")
 REPORT_PATH = Path("data/parsed/parse_report.csv")
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://pt:pt@localhost:5432/prices")
 
 RULES = {
     "cms_hpt_lists_hospital": "cms-hpt.txt at the website root names this hospital's price file",
@@ -128,35 +128,26 @@ def standard_charge_check(rule: str, services: int, priced: int, what: str) -> t
             f"{priced} of {services} shoppable services have a {what}")  # fmt: skip
 
 
-def shoppable_standard_charges(conn: psycopg.Connection) -> dict[str, dict]:
+def shoppable_standard_charges() -> dict[str, dict]:
     """Per hospital: how many CMS shoppable services its file prices, and how many of those
     have a cash price and a list (gross) price."""
-    if conn.execute("SELECT to_regclass('raw.hospital_charges')").fetchone()[0] is None:
-        return {}
-    rows = conn.execute(
-        """SELECT ccn, count(*), count(*) FILTER (WHERE cash), count(*) FILTER (WHERE gross)
-           FROM (SELECT ccn, code_type, code,
-                        bool_or(price_type = 'discounted_cash' AND amount IS NOT NULL) AS cash,
-                        bool_or(price_type = 'gross' AND amount IS NOT NULL) AS gross
-                 FROM raw.hospital_charges WHERE cms_shoppable_id IS NOT NULL
-                 GROUP BY ccn, code_type, code) AS s
-           GROUP BY ccn"""
-    ).fetchall()
-    return {ccn: {"shoppable_services": n, "shoppable_with_cash": cash, "shoppable_with_gross": gross}
-            for ccn, n, cash, gross in rows}  # fmt: skip
+    df = lake.read(
+        "raw/hospital_charges/*/*/*.parquet",
+        sql="""
+        SELECT ccn, count(*) AS n, count(*) FILTER (WHERE cash) AS cash,
+               count(*) FILTER (WHERE gross) AS gross
+        FROM (SELECT ccn, code_type, code,
+                     bool_or(price_type = 'discounted_cash' AND amount IS NOT NULL) AS cash,
+                     bool_or(price_type = 'gross' AND amount IS NOT NULL) AS gross
+              FROM {} WHERE cms_shoppable_id IS NOT NULL
+              GROUP BY ccn, code_type, code) AS s
+        GROUP BY ccn""",
+    )
+    return {r["ccn"]: {"shoppable_services": r["n"], "shoppable_with_cash": r["cash"],
+                       "shoppable_with_gross": r["gross"]} for r in df.to_dicts()}  # fmt: skip
 
 
-def latest_downloads(conn: psycopg.Connection) -> dict[str, dict]:
-    conn.execute(SCHEMA_SQL)  # so a fresh database (CI) has an empty table, not an error
-    rows = conn.execute(
-        """SELECT DISTINCT ON (ccn) ccn, outcome, access, error FROM raw.source_files
-           ORDER BY ccn, attempted_at DESC"""
-    ).fetchall()
-    return {ccn: {"outcome": outcome, "access": access, "error": error}
-            for ccn, outcome, access, error in rows}  # fmt: skip
-
-
-def main() -> None:
+def main() -> pl.DataFrame:
     hospitals = pl.read_csv(HOSPITALS_PATH, infer_schema_length=0).filter(
         pl.col("federally_run") == "false"
     )
@@ -166,29 +157,21 @@ def main() -> None:
         report = {r["ccn"]: r for r in pl.read_csv(REPORT_PATH, infer_schema_length=0).to_dicts()}
     checked_at = datetime.now(UTC)
 
-    with psycopg.connect(DATABASE_URL, autocommit=True) as conn:
-        downloads = latest_downloads(conn)
-        for ccn, counts in shoppable_standard_charges(conn).items():
-            if ccn in report:
-                report[ccn] = report[ccn] | counts
-        rows = [
-            (ccn, rule, passed, detail, checked_at)
-            for ccn in hospitals["ccn"]
-            for rule, passed, detail in check_hospital(
-                sources.get(ccn, {}), downloads.get(ccn), report.get(ccn), checked_at.date()
-            )
-        ]
-        with conn.transaction():
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS raw.compliance_checks (
-                    ccn text NOT NULL, rule text NOT NULL, passed boolean, detail text,
-                    checked_at timestamptz NOT NULL, PRIMARY KEY (ccn, rule))""")
-            conn.execute("TRUNCATE raw.compliance_checks")
-            with conn.cursor() as cur:
-                cur.executemany("INSERT INTO raw.compliance_checks VALUES (%s, %s, %s, %s, %s)",
-                                rows)  # fmt: skip
-
-    df = pl.DataFrame(rows, schema=["ccn", "rule", "passed", "detail", "checked_at"], orient="row")
+    downloads = source_log.latest(source_log.read())
+    for ccn, counts in shoppable_standard_charges().items():
+        if ccn in report:
+            report[ccn] = report[ccn] | counts
+    rows = [
+        (ccn, rule, passed, detail, checked_at)
+        for ccn in hospitals["ccn"]
+        for rule, passed, detail in check_hospital(
+            sources.get(ccn, {}), downloads.get(ccn), report.get(ccn), checked_at.date()
+        )
+    ]
+    df = pl.DataFrame(rows, orient="row", schema={
+        "ccn": pl.String, "rule": pl.String, "passed": pl.Boolean, "detail": pl.String,
+        "checked_at": pl.Datetime("us", "UTC")})  # fmt: skip
+    lake.replace_folder("raw/compliance_checks", df, "checks.parquet")
     summary = df.group_by("rule").agg(
         pl.col("passed").sum().alias("pass"),
         (~pl.col("passed")).sum().alias("fail"),
@@ -196,6 +179,7 @@ def main() -> None:
     )
     order = {rule: i for i, rule in enumerate(RULES)}
     print(summary.sort(pl.col("rule").replace_strict(order)))
+    return df
 
 
 if __name__ == "__main__":

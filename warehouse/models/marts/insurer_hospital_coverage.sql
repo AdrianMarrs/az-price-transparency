@@ -17,7 +17,7 @@ with hospitals as (
 ),
 
 insurers as (
-    select distinct insurer, initcap(insurer) as payer_group from {{ ref('stg_insurer_rates') }}
+    select distinct insurer, {{ initcap_word('insurer') }} as payer_group from {{ ref('stg_insurer_rates') }}
 ),
 
 npis as (

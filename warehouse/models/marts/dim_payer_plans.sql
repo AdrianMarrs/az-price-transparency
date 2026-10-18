@@ -29,7 +29,7 @@ payer_plans as (
 group_match as (
     select distinct on (p.payer_name) p.payer_name, g.payer_group
     from (select distinct payer_name from payer_plans) as p
-    join {{ ref('payer_group_patterns') }} as g on p.payer_name ~* g.pattern
+    join {{ ref('payer_group_patterns') }} as g on {{ matches_regex('p.payer_name', 'g.pattern') }}
     order by p.payer_name, g.priority
 ),
 
@@ -37,7 +37,7 @@ market_match as (
     select distinct on (p.payer_name, p.plan_name, m.strength)
         p.payer_name, p.plan_name, m.strength, m.market
     from payer_plans as p
-    join {{ ref('market_patterns') }} as m on p.search_text ~* m.pattern
+    join {{ ref('market_patterns') }} as m on {{ matches_regex('p.search_text', 'm.pattern') }}
     order by p.payer_name, p.plan_name, m.strength, m.priority
 )
 

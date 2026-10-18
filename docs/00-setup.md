@@ -10,10 +10,10 @@ Phase 0 gives the project a reproducible local stack, automated checks on every 
 | Environments | uv | One fast tool for Python versions, virtual environments and a lockfile | pip + venv, Poetry |
 | Dataframes | polars | Fast, low-memory, and handles unpivoting wide price files cleanly | pandas |
 | Validation | pydantic | Typed models with clear error messages for rejected rows | Hand-written checks |
-| Warehouse | PostgreSQL 16 | System of record; widely used; dbt support is mature | DuckDB: simpler locally, may still be used for exploration |
+| Warehouse | PostgreSQL 16 at first; since October 2026 a Parquet lake and a DuckDB file built by dbt | Postgres was the familiar system of record. For every state it would have needed a server running all the time (about 60x Arizona's 3.7 GB); the same rows are about 75x smaller as Parquet (75 MB against 5.8 GB with indexes), and DuckDB builds from them with no server (docs/03-cloud.md) | DuckDB from the start |
 | Raw storage | Compressed files (local disk now, S3 later) | Hospitals overwrite their files, so every download is kept as evidence; files are cheaper and simpler than any database for this | MongoDB: cut, since DynamoDB already covers NoSQL in Phase 3 and Postgres `jsonb` covers nested JSON |
 | Locks and cache | Redis 7 (local) | Locks so two scheduled runs never fetch the same file; cache-aside for slow warehouse queries | ElastiCache in front of the API: not on the Free plan, needs a VPC, and DynamoDB is already fast. CloudFront caches the API instead |
-| Local services | Docker Compose | One command brings up Postgres and Redis, the same on any machine | Installing each database natively |
+| Local services | Docker Compose | One command brings up Redis (and Postgres, until it was retired), the same on any machine | Installing each database natively |
 | CI | GitHub Actions | Lint, format check and tests on every push and pull request | None needed beyond this yet |
 | Lint and format | ruff | One fast tool for both | flake8 + black |
 | Cloud | AWS, Free plan | Matches my Lambda background; the Free plan makes charges impossible while learning | Paid plan with budget alerts (alerts don't stop spending) |
@@ -28,10 +28,9 @@ Phase 0 gives the project a reproducible local stack, automated checks on every 
 ## Running it
 
 ```
-docker compose up -d      # Postgres :5432, Redis :6379
+docker compose up -d redis   # Redis :6379
 uv sync                   # install dependencies
 uv run pytest             # tests
 uv run ruff check .       # lint
 ```
 
-Postgres: user `pt`, password `pt`, database `prices` (local development only).

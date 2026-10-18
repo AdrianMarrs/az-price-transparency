@@ -3,18 +3,22 @@
 Usage:
     uv run python scripts/compliance_report.py
 
-Reads raw.compliance_checks, marts.hospital_compliance_scores and the discovery and parse
-results, and writes docs/reports/arizona-compliance-<yyyy-mm-dd>.md. Run it after the
+Reads raw.compliance_checks (the Parquet lake), marts.hospital_compliance_scores (the DuckDB
+warehouse, WAREHOUSE) and the discovery and parse results, and writes docs/reports/arizona-compliance-<yyyy-mm-dd>.md. Run it after the
 warehouse build (Dagster's build_warehouse job) so the numbers match the checks.
 """
 
 import os
+import sys
 from pathlib import Path
 
+import duckdb
 import polars as pl
-import psycopg
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://pt:pt@localhost:5432/prices")
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from ingest import lake
+
+WAREHOUSE = os.environ.get("WAREHOUSE", "data/warehouse.duckdb")
 OUT_DIR = Path("docs/reports")
 RULE_NAMES = {
     "cms_hpt_lists_hospital": "cms-hpt.txt names the hospital's price file",
@@ -31,11 +35,6 @@ RULE_NAMES = {
 }
 
 
-def query(conn: psycopg.Connection, sql: str) -> pl.DataFrame:
-    cur = conn.execute(sql)
-    return pl.DataFrame(cur.fetchall(), schema=[d.name for d in cur.description], orient="row")
-
-
 def table(df: pl.DataFrame) -> str:
     head = "| " + " | ".join(df.columns) + " |"
     rule = "| " + " | ".join("---" for _ in df.columns) + " |"
@@ -44,17 +43,14 @@ def table(df: pl.DataFrame) -> str:
 
 
 def main() -> None:
-    with psycopg.connect(DATABASE_URL) as conn:
-        checks = query(
-            conn, "SELECT ccn, rule, passed, detail, checked_at FROM raw.compliance_checks"
-        )
-        scores = query(
-            conn,
-            """
-            SELECT ccn, initcap(name) AS hospital, initcap(city) AS city, hospital_type,
-                   rules_checked, rules_passed, score_pct, failed_rules
-            FROM marts.hospital_compliance_scores ORDER BY score_pct NULLS LAST, name""",
-        )
+    checks = lake.read("raw/compliance_checks/*.parquet")
+    with duckdb.connect(WAREHOUSE, read_only=True) as conn:
+        scores = conn.execute(
+            """SELECT ccn, name AS hospital, city, hospital_type,
+                      rules_checked, rules_passed, score_pct, failed_rules
+               FROM marts.hospital_compliance_scores ORDER BY score_pct NULLS LAST, name"""
+        ).pl()
+    scores = scores.with_columns(pl.col("hospital", "city").str.to_titlecase())
     checked_on = checks["checked_at"].max().date()
     pretty_date = f"{checked_on:%B} {checked_on.day}, {checked_on:%Y}"  # %-d isn't portable
     n = scores.height

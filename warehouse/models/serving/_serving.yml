@@ -1,20 +1,19 @@
 version: 2
 
-# One row per hospital x service and per hospital, written as static files by
-# serving/export_static.py. Built for DynamoDB (400 KB items), whose size bound still keeps
-# each hospital's part of a service file small.
+# What serving/export_static.py writes the site's data files from.
 
 models:
-  - name: srv_hospital_service_items
-    description: One hospital x service item (prices per plan) for the serving table.
+  - name: srv_service_prices
+    description: >
+      One row per hospital x service x payer x plan x setting x price type (payer null for
+      list, cash, min and max prices); the exporter builds each service's file from them.
     columns:
-      - name: item_key
-        data_tests: [unique, not_null]
-      - name: content_hash
+      - name: service_key
         data_tests: [not_null]
-      - name: item_bytes
-        data_tests:
-          - under_dynamodb_item_limit
+      - name: ccn
+        data_tests: [not_null]
+      - name: n
+        data_tests: [not_null]
 
   - name: srv_hospital_profiles
     description: One PROFILE item per in-scope hospital, with its compliance score.

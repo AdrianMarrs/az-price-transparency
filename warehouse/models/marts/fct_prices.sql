@@ -50,7 +50,7 @@ insurer as (
         r.setting,
         r.billing_class,
         r.modifiers,
-        initcap(r.insurer) as payer_name,
+        {{ initcap_word('r.insurer') }} as payer_name,
         r.network as plan_name,
         r.methodology,
         r.price_type,

@@ -1,19 +1,6 @@
 services:
-  postgres:
-    image: postgres:16
-    # Bulk reloads write several GB of WAL; at the 1GB default, checkpoints run back to back
-    # and each took 45-58 s on Docker's virtual disk.
-    command: ["postgres", "-c", "max_wal_size=4GB"]
-    environment:
-      POSTGRES_USER: pt
-      POSTGRES_PASSWORD: pt
-      POSTGRES_DB: prices
-    ports: ["5432:5432"]
-    volumes: [pgdata:/var/lib/postgresql/data]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pt -d prices"]
-      interval: 5s
-      retries: 10
+  # Postgres was here until October 2026; the warehouse is now a DuckDB file built from the
+  # Parquet lake (data/lake). Its old volume (az-price-transparency_pgdata) was left in place.
   redis:
     image: redis:7
     ports: ["6379:6379"]
@@ -28,5 +15,3 @@ services:
       - ./web:/app/web
       - /app/web/node_modules  # the container's own (Linux) packages, not the host's
       - ./warehouse/seeds:/app/warehouse/seeds:ro
-volumes:
-  pgdata:

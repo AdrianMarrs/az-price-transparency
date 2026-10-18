@@ -3,13 +3,9 @@ terms, as the site searches it (data/<state>/search.json, written by export_stat
 """
 
 import csv
-import os
 import re
 from pathlib import Path
 
-import psycopg
-
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://pt:pt@localhost:5432/prices")
 SEARCH_TERMS_PATH = Path(__file__).resolve().parents[1] / "warehouse/seeds/service_search_terms.csv"
 
 
@@ -43,13 +39,27 @@ def search_terms(code: str, text: str, rules: list[tuple[str, re.Pattern, str]])
     return " ".join(words) or None
 
 
-def services_list(conn: psycopg.Connection) -> list[dict]:
-    """Every service at least one hospital prices, for search (data/<state>/search.json)."""
+def services_list(conn, state: str | None = None) -> list[dict]:
+    """Every service at least one hospital prices, for search (data/<state>/search.json);
+    with a state, only that state's hospitals are counted."""
     rules = load_search_terms()
-    rows = conn.execute("""
-        SELECT service_key, code, code_type, common_description, cms_shoppable_id,
-               cms_description, hospitals
-        FROM marts.dim_services WHERE hospitals > 0 ORDER BY service_key""").fetchall()
+    if state is None:
+        rows = conn.execute("""
+            SELECT service_key, code, code_type, common_description, cms_shoppable_id,
+                   cms_description, hospitals
+            FROM marts.dim_services WHERE hospitals > 0 ORDER BY service_key""").fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT s.service_key, s.code, s.code_type, s.common_description,
+                   s.cms_shoppable_id, s.cms_description, n.hospitals
+            FROM marts.dim_services AS s
+            JOIN (SELECT service_key, count(DISTINCT ccn) AS hospitals
+                  FROM serving.srv_service_prices WHERE lower(state) = ?
+                  GROUP BY service_key) AS n USING (service_key)
+            ORDER BY s.service_key""",
+            [state.lower()],
+        ).fetchall()
     return [compact({"id": service_id(key), "key": key, "code": code, "code_type": code_type,
                      "description": description, "cms_shoppable_id": shoppable,
                      "cms_description": cms_description, "hospitals": hospitals,

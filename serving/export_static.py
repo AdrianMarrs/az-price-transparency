@@ -16,9 +16,10 @@ Only files whose bytes changed are uploaded (S3's ETag is the MD5 of a single-pa
 so it's compared with the new file's), and files no longer produced are deleted. Writes
 are deterministic (gzip without a timestamp), so a rerun with the same data uploads nothing.
 
-Reads the dbt serving models (serving.srv_hospital_service_items and srv_hospital_profiles)
-and marts.dim_services. Needs SITE_BUCKET; with SITE_DISTRIBUTION_ID set and anything
-changed, it clears /data/* from the site's CloudFront cache.
+Reads the dbt serving models (serving.srv_service_prices and srv_hospital_profiles)
+and marts.dim_services from the DuckDB warehouse (WAREHOUSE, data/warehouse.duckdb). Needs
+SITE_BUCKET; with SITE_DISTRIBUTION_ID set and anything changed, it clears /data/<state>/*
+from the site's CloudFront cache.
 """
 
 import argparse
@@ -32,9 +33,11 @@ from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 
 import boto3
-import psycopg
+import duckdb
 
-from serving.services import DATABASE_URL, compact, services_list
+from serving.services import compact, services_list
+
+WAREHOUSE = os.environ.get("WAREHOUSE", "data/warehouse.duckdb")
 
 STATE = "az"
 NOTE = "Published hospital standard charges, not a quote. Check with your insurer and hospital."
@@ -56,8 +59,10 @@ def encode(value) -> bytes:
     return gzip.compress(data, compresslevel=9, mtime=0)
 
 
-def profiles(conn: psycopg.Connection) -> dict[str, dict]:
-    rows = conn.execute("SELECT item FROM serving.srv_hospital_profiles").fetchall()
+def profiles(conn: duckdb.DuckDBPyConnection, state: str = STATE) -> dict[str, dict]:
+    rows = conn.execute(
+        "SELECT item FROM serving.srv_hospital_profiles WHERE lower(state) = ?", [state.lower()]
+    ).fetchall()
     found = {}
     for (item,) in rows:
         p = compact(json.loads(item))
@@ -65,22 +70,60 @@ def profiles(conn: psycopg.Connection) -> dict[str, dict]:
     return found
 
 
-def service_items(conn: psycopg.Connection) -> Iterator[tuple[str, list[dict]]]:
-    """(service key, every hospital's item for it), streamed one service at a time."""
-    sql = """SELECT gsi1pk, item FROM serving.srv_hospital_service_items
-             ORDER BY gsi1pk, item_key"""
-    key, items = None, []
-    with conn.transaction(), conn.cursor(name="service_items") as cur:
-        cur.itersize = 2000
-        cur.execute(sql)
-        for gsi1pk, item in cur:
-            this = gsi1pk.removeprefix("SERVICE#")
-            if key is not None and this != key:
+PRICE_COLUMNS = ("service_key", "ccn", "payer_name", "plan_name", "payer_group", "market",
+                 "setting", "price_type", "methodology", "amount", "algorithm", "bundled", "n")  # fmt: skip
+
+
+def number(x: float | None) -> float | int | None:
+    """1346.0 -> 1346, so whole amounts are written as Postgres wrote them."""
+    return int(x) if isinstance(x, float) and x.is_integer() else x
+
+
+def hospital_item(ccn: str, rows: list[dict]) -> dict:
+    """One hospital's part of a service file from its srv_service_prices rows: insurer
+    prices, the standard (list, cash, min, max) prices, and how many plans it lists."""
+    prices = sorted(
+        (compact({"payer": r["payer_name"], "plan": r["plan_name"], "group": r["payer_group"],
+                  "market": r["market"], "setting": r["setting"], "type": r["price_type"],
+                  "method": r["methodology"], "amount": number(r["amount"]),
+                  "algorithm": r["algorithm"], "bundled": r["bundled"], "n": r["n"]})
+         for r in rows if r["payer_name"] is not None),
+        key=lambda p: (p["payer"], p.get("plan", ""), p["setting"], p["type"]),
+    )  # fmt: skip
+    standard = sorted(
+        (compact({"setting": r["setting"], "type": r["price_type"],
+                  "amount": number(r["amount"]), "n": r["n"]})
+         for r in rows if r["payer_name"] is None),
+        key=lambda p: (p["setting"], p["type"]),
+    )  # fmt: skip
+    plans = len({(r["payer_name"], r["plan_name"]) for r in rows if r["payer_name"] is not None})
+    return {"ccn": ccn, "plans": plans, "standard": standard, "prices": prices}
+
+
+def service_items(conn: duckdb.DuckDBPyConnection, state: str = STATE
+                  ) -> Iterator[tuple[str, list[dict]]]:  # fmt: skip
+    """(service key, every hospital's item for it), streamed one service at a time from
+    srv_service_prices, so memory holds one service, not the state."""
+    cur = conn.execute(
+        f"SELECT {', '.join(PRICE_COLUMNS)} FROM serving.srv_service_prices "
+        "WHERE lower(state) = ? ORDER BY service_key, ccn",
+        [state.lower()],
+    )
+    key, ccn, items, rows = None, None, [], []
+    while batch := cur.fetchmany(5000):
+        for values in batch:
+            r = dict(zip(PRICE_COLUMNS, values, strict=True))
+            if (r["service_key"], r["ccn"]) != (key, ccn) and rows:
+                items.append(hospital_item(ccn, rows))
+                rows = []
+            if r["service_key"] != key and items:
                 yield key, items
                 items = []
-            key = this
-            items.append(compact(json.loads(item)))
-    if key is not None:
+            key, ccn = r["service_key"], r["ccn"]
+            rows.append(r)
+    if rows:
+        items.append(hospital_item(ccn, rows))
+    if items:
         yield key, items
 
 
@@ -96,16 +139,16 @@ def compare(service: dict, items: list[dict], hospitals: dict[str, dict]) -> dic
     return {"service": service, "hospitals": rows, "note": NOTE}
 
 
-def build(conn: psycopg.Connection, state: str = STATE) -> Iterator[tuple[str, bytes]]:
+def build(conn: duckdb.DuckDBPyConnection, state: str = STATE) -> Iterator[tuple[str, bytes]]:
     """(S3 key, gzip bytes) for every file."""
     prefix = f"data/{state}"
-    services = services_list(conn)
+    services = services_list(conn, state)
     yield f"{prefix}/search.json", encode(services)
-    hospitals = profiles(conn)
+    hospitals = profiles(conn, state)
     for ccn, p in hospitals.items():
         yield f"{prefix}/providers/{ccn}.json", encode(p | {"note": NOTE})
     by_key = {s["key"]: s for s in services}
-    for key, items in service_items(conn):
+    for key, items in service_items(conn, state):
         if (service := by_key.get(key)) is not None:
             yield (
                 f"{prefix}/services/{slug(service['id'])}.json",
@@ -186,7 +229,7 @@ def main() -> None:
             "Set SITE_BUCKET (terraform -chdir=infra/main output site_bucket), or --out"
         )
     started = time.time()
-    with psycopg.connect(DATABASE_URL) as conn:
+    with duckdb.connect(WAREHOUSE, read_only=True) as conn:
         counts = sync(build(conn), bucket, out=args.out, dry_run=args.dry_run)
     verb = "would upload" if args.dry_run else "uploaded"
     print(f"{counts['files']:,} files ({counts['bytes'] / 1e6:,.0f} MB compressed); "

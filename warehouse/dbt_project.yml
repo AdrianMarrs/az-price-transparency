@@ -10,6 +10,9 @@ analysis-paths: ["analyses"]
 target-path: "target"
 clean-targets: ["target", "dbt_packages", "logs"]
 
+on-run-start:
+  - "{{ create_lake_views() }}"
+
 models:
   az_prices:
     staging:

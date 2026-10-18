@@ -79,3 +79,41 @@ def test_a_service_file_matches_what_the_api_returned():
     assert out["hospitals"][1] == {"hospital": {"ccn": "030006", "name": "TUCSON MEDICAL CENTER"},
                                    "plans": 3, "standard": [], "prices": []}  # fmt: skip
     assert out["note"] == es.NOTE
+
+
+def warehouse():
+    """A tiny warehouse with an Arizona and a New Mexico hospital pricing one knee MRI."""
+    import duckdb
+
+    con = duckdb.connect()
+    con.execute("CREATE SCHEMA marts; CREATE SCHEMA serving")
+    con.execute("""CREATE TABLE marts.dim_services AS SELECT 'cpt-hcpcs:73721' AS service_key,
+        '73721' AS code, 'CPT/HCPCS' AS code_type, 'MRI knee' AS common_description,
+        33 AS cms_shoppable_id, 'MRI of a joint' AS cms_description, 2 AS hospitals""")
+    con.execute(f"CREATE TABLE serving.srv_service_prices AS SELECT * FROM (VALUES "
+                "('AZ', 'cpt-hcpcs:73721', '030006', 'Aetna', 'PPO', 'Aetna', 'commercial', "
+                " 'outpatient', 'negotiated_dollar', 'fee schedule', 689.5::double, NULL, false, 2),"
+                "('AZ', 'cpt-hcpcs:73721', '030006', NULL, NULL, NULL, NULL, "
+                " 'outpatient', 'discounted_cash', NULL, 400.0::double, NULL, false, 1),"
+                "('NM', 'cpt-hcpcs:73721', '320001', NULL, NULL, NULL, NULL, "
+                " 'outpatient', 'gross', NULL, 2000.0::double, NULL, false, 1)"
+                f") AS t(state, {', '.join(es.PRICE_COLUMNS)})")  # fmt: skip
+    con.execute("""CREATE TABLE serving.srv_hospital_profiles AS SELECT * FROM (VALUES
+        ('AZ', '{"ccn": "030006", "name": "TMC", "score_pct": 90}'),
+        ('NM', '{"ccn": "320001", "name": "UNM", "score_pct": 50}')) AS t(state, item)""")
+    return con
+
+
+def test_a_state_gets_only_its_own_hospitals():
+    files = {k: json.loads(gzip.decompress(b)) for k, b in es.build(warehouse(), "az")}
+    assert sorted(files) == ["data/az/providers/030006.json", "data/az/search.json",
+                             "data/az/services/cpt-73721.json"]  # fmt: skip
+    assert files["data/az/search.json"][0]["hospitals"] == 1  # not New Mexico's too
+    (hospital,) = files["data/az/services/cpt-73721.json"]["hospitals"]
+    assert hospital["hospital"] == {"ccn": "030006", "name": "TMC", "score_pct": 90}
+    assert hospital["plans"] == 1
+    assert hospital["standard"] == [{"setting": "outpatient", "type": "discounted_cash",
+                                     "amount": 400, "n": 1}]  # fmt: skip
+    assert hospital["prices"][0]["amount"] == 689.5
+    nm = dict(es.build(warehouse(), "nm"))
+    assert "data/nm/providers/320001.json" in nm and "data/nm/providers/030006.json" not in nm

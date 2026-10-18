@@ -7,7 +7,8 @@ Usage:
 
 Reads warehouse/seeds/hospital_sources.csv. Each file is streamed (never held in memory),
 hashed with SHA-256 as it arrives, and written gzip-compressed to
-data/raw/<yyyy-mm-dd>/<ccn>_<file name>.gz. Every attempt is recorded in raw.source_files.
+data/raw/<yyyy-mm-dd>/<ccn>_<file name>.gz. Every attempt is recorded in raw.source_files
+(ingest/hospitals/source_log.py, in the Parquet lake).
 Nothing new is kept when the server says the file hasn't changed (ETag / Last-Modified)
 or when its checksum matches the last download.
 
@@ -30,21 +31,19 @@ import os
 import sys
 import time
 import webbrowser
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
 import polars as pl
-import psycopg
 
-from ingest.hospitals import browser
+from ingest.hospitals import browser, source_log
 from ingest.hospitals.find_sources import BROWSER_USER_AGENT, USER_AGENT
+from ingest.hospitals.source_log import LastDownload
 from ingest.storage import upload
 
 SOURCES_PATH = Path("warehouse/seeds/hospital_sources.csv")
 RAW_DIR = Path("data/raw")
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://pt:pt@localhost:5432/prices")
 ATTEMPTS = 4
 CHUNK = 1 << 20  # 1 MiB
 # Files larger than this (by Content-Length) are skipped and recorded: the parser holds a
@@ -53,39 +52,9 @@ MAX_BYTES = 5 * 10**9
 DOWNLOADS_DIR = Path(os.environ.get("DOWNLOADS_DIR", Path.home() / "Downloads"))
 BROWSER_WAIT_SECONDS = 600
 
-SCHEMA_SQL = """
-CREATE SCHEMA IF NOT EXISTS raw;
-CREATE TABLE IF NOT EXISTS raw.source_files (
-    id            bigserial PRIMARY KEY,
-    ccn           text        NOT NULL,
-    url           text        NOT NULL,
-    attempted_at  timestamptz NOT NULL,
-    outcome       text        NOT NULL,  -- downloaded, unchanged, failed
-    access        text,                  -- direct, browser_ua_only, browser_download, manual_download
-    http_status   int,
-    format        text,
-    sha256        text,
-    size_bytes    bigint,
-    path          text,
-    etag          text,
-    last_modified text,
-    error         text,
-    s3_uri        text                   -- the copy in the data bucket, if uploaded
-);
-ALTER TABLE raw.source_files ADD COLUMN IF NOT EXISTS s3_uri text;
-"""
-
 
 class RetryableStatus(Exception):
     """A server error worth retrying (5xx, 429)."""
-
-
-@dataclass
-class LastDownload:
-    sha256: str
-    path: str
-    etag: str | None
-    last_modified: str | None
 
 
 def file_format(url: str, content_type: str) -> str:
@@ -187,26 +156,6 @@ def download(
     raise AssertionError("unreachable")
 
 
-def last_download(conn: psycopg.Connection, ccn: str, url: str) -> LastDownload | None:
-    row = conn.execute(
-        """SELECT sha256, path, etag, last_modified FROM raw.source_files
-           WHERE ccn = %s AND url = %s AND outcome = 'downloaded'
-           ORDER BY attempted_at DESC LIMIT 1""",
-        (ccn, url),
-    ).fetchone()
-    return LastDownload(*row) if row else None
-
-
-def record(conn: psycopg.Connection, row: dict, attempted_at: datetime) -> None:
-    columns = ["ccn", "url", "outcome", "access", "http_status", "format", "sha256",
-               "size_bytes", "path", "etag", "last_modified", "error", "s3_uri"]  # fmt: skip
-    conn.execute(
-        f"INSERT INTO raw.source_files (attempted_at, {', '.join(columns)}) "
-        f"VALUES (%s, {', '.join(['%s'] * len(columns))})",
-        [attempted_at, *(row.get(c) for c in columns)],
-    )
-
-
 def import_file(ccn: str, src: Path, url: str, day_dir: Path,
                 access: str = "manual_download") -> dict:  # fmt: skip
     """Store a file downloaded by hand as data/raw/<day>/<ccn>_<name>.gz; returns its row.
@@ -238,9 +187,8 @@ def import_manual(ccn: str, src: Path, access: str = "manual_download") -> dict:
     if expected and not matches_download(src.name, expected):
         print(f"note: {src.name} is not the file named in the sources seed ({url})")
     started = datetime.now(UTC)
-    with psycopg.connect(DATABASE_URL, autocommit=True) as conn:
-        conn.execute(SCHEMA_SQL)
-        last = last_download(conn, ccn, url)
+    with source_log.Log() as log:
+        last = log.last(ccn, url)
         row = import_file(ccn, src, url, RAW_DIR / started.strftime("%Y-%m-%d"), access)
         if last and last.sha256 == row["sha256"] and Path(last.path).exists():
             if Path(row["path"]) != Path(last.path):
@@ -248,7 +196,7 @@ def import_manual(ccn: str, src: Path, access: str = "manual_download") -> dict:
             row |= {"outcome": "unchanged", "path": last.path}
         else:
             row["s3_uri"] = upload(Path(row["path"]))
-        record(conn, row, started)
+        log.record(row, started)
     print(f"{ccn}  {row['outcome']} {row['size_bytes'] / 1e6:,.0f} MB  {row['path']}")
     return row
 
@@ -291,12 +239,12 @@ def wait_for_download(expected: str, since: float) -> Path | None:
 def fetch_in_browser(ccns: list[str] | None = None) -> list[dict]:
     """Open each blocked price file in the browser, wait for the download, import it."""
     if not ccns:
-        with psycopg.connect(DATABASE_URL, autocommit=True) as conn:
-            conn.execute(SCHEMA_SQL)
-            ccns = [r[0] for r in conn.execute(
-                """SELECT DISTINCT ccn FROM raw.source_files
-                   WHERE access IN ('manual_download', 'browser_download')"""
-            ).fetchall()]  # fmt: skip
+        attempts = source_log.read()
+        ccns = (
+            attempts.filter(pl.col("access").is_in(["manual_download", "browser_download"]))["ccn"]
+            .unique()
+            .to_list()
+        )
     if not ccns:
         raise SystemExit("no hospital has been imported by hand yet; name them with --ccn")
     sources = pl.read_csv(SOURCES_PATH, infer_schema_length=0).filter(pl.col("ccn").is_in(ccns))
@@ -326,17 +274,16 @@ def download_hospitals(ccns: list[str] | None = None) -> list[dict]:
     timeout = httpx.Timeout(60, read=300)
     headers = {"User-Agent": USER_AGENT}
     with (
-        psycopg.connect(DATABASE_URL, autocommit=True) as conn,
+        source_log.Log() as log,
         httpx.Client(timeout=timeout, follow_redirects=True, headers=headers) as client,
     ):
-        conn.execute(SCHEMA_SQL)
         for s in sources.iter_rows(named=True):
             started = datetime.now(UTC)
-            last = last_download(conn, s["ccn"], s["mrf_url"])
+            last = log.last(s["ccn"], s["mrf_url"])
             row = download(client, s["ccn"], s["mrf_url"], day_dir, last)
             if row["outcome"] == "downloaded":
                 row["s3_uri"] = upload(Path(row["path"]))
-            record(conn, row, started)
+            log.record(row, started)
             seconds = (datetime.now(UTC) - started).total_seconds()
             size = f"{row['size_bytes'] / 1e6:,.0f} MB" if row.get("size_bytes") else ""
             detail = row.get("error") or row.get("path", "")

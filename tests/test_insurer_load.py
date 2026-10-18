@@ -1,27 +1,18 @@
-"""Insurer loader tests against a real Postgres. Skipped if Postgres is down."""
+"""Insurer loader tests: networks written to a lake in a temporary folder."""
 
 import polars as pl
-import psycopg
 import pytest
 
-from ingest.hospitals.load import DATABASE_URL
-from ingest.insurers.load import create_table, load_network
+from ingest import lake
+from ingest.insurers.load import load_network
 from ingest.insurers.normalize import SCHEMA as COLUMNS
 
-SCHEMA = "test_insurer_load"
+GLOB = "raw/insurer_rates/*/*/*/*.parquet"
 
 
-@pytest.fixture
-def conn():
-    try:
-        connection = psycopg.connect(DATABASE_URL, autocommit=True, connect_timeout=3)
-    except psycopg.OperationalError:
-        pytest.skip("Postgres is not running")
-    with connection:
-        connection.execute(f"DROP SCHEMA IF EXISTS {SCHEMA} CASCADE")
-        create_table(connection, SCHEMA)
-        yield connection
-        connection.execute(f"DROP SCHEMA {SCHEMA} CASCADE")
+@pytest.fixture(autouse=True)
+def temp_lake(tmp_path, monkeypatch):
+    monkeypatch.setenv("LAKE", str(tmp_path / "lake"))
 
 
 def frame(network: str, n: int, month: str = "2026-10") -> pl.DataFrame:
@@ -36,39 +27,41 @@ def frame(network: str, n: int, month: str = "2026-10") -> pl.DataFrame:
     return pl.DataFrame(rows, schema=COLUMNS)
 
 
-def counts(conn) -> dict:
-    return dict(
-        conn.execute(
-            f"SELECT network || '/' || month, count(*) FROM {SCHEMA}.insurer_rates GROUP BY 1"
-        ).fetchall()
-    )
+def counts() -> dict:
+    df = lake.read(GLOB)
+    return dict(df.group_by(pl.format("{}/{}", "network", "month")).len().rows())
 
 
-def test_copy_round_trips_values_and_nulls(conn):
-    assert load_network(conn, frame("arizona-hmo", 2), SCHEMA) == 2
-    rows = conn.execute(
-        f"SELECT negotiated_rate, service_codes FROM {SCHEMA}.insurer_rates ORDER BY 1"
-    ).fetchall()
-    assert rows == [(100.0, None), (101.0, "11,22")]
+def test_values_and_nulls_round_trip():
+    assert load_network(frame("arizona-hmo", 2)) == 2
+    rows = lake.read(GLOB).sort("negotiated_rate")
+    assert rows.select("negotiated_rate", "service_codes").rows() == [(100.0, None),
+                                                                        (101.0, "11,22")]  # fmt: skip
+    assert rows["ccn"][0] == "030006"
 
 
-def test_reloading_a_network_replaces_only_its_rows(conn):
-    load_network(conn, frame("arizona-hmo", 5), SCHEMA)
-    load_network(conn, frame("phoenix-az-connect", 2), SCHEMA)
-    load_network(conn, frame("arizona-hmo", 4, month="2026-11"), SCHEMA)
-    load_network(conn, frame("arizona-hmo", 3), SCHEMA)
-    assert counts(conn) == {
+def test_reloading_a_network_replaces_only_its_rows():
+    load_network(frame("arizona-hmo", 5))
+    load_network(frame("phoenix-az-connect", 2))
+    load_network(frame("arizona-hmo", 4, month="2026-11"))
+    load_network(frame("arizona-hmo", 3))
+    assert counts() == {
         "arizona-hmo/2026-10": 3,
         "arizona-hmo/2026-11": 4,
         "phoenix-az-connect/2026-10": 2,
     }
 
 
-def test_a_frame_must_be_one_network(conn):
+def test_a_frame_must_be_one_network():
     mixed = pl.concat([frame("arizona-hmo", 1), frame("phoenix-az-connect", 1)])
     with pytest.raises(ValueError):
-        load_network(conn, mixed, SCHEMA)
+        load_network(mixed)
 
 
-def test_an_empty_frame_loads_nothing(conn):
-    assert load_network(conn, pl.DataFrame(schema=COLUMNS), SCHEMA) == 0
+def test_a_network_name_must_be_plain():
+    with pytest.raises(ValueError, match="plain name"):
+        load_network(frame("../elsewhere", 1))
+
+
+def test_an_empty_frame_loads_nothing():
+    assert load_network(pl.DataFrame(schema=COLUMNS)) == 0

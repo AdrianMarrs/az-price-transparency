@@ -1,15 +1,19 @@
-# Connection settings. Values come from environment variables, with defaults that match
-# docker-compose.yml, so nothing secret is stored here. Run dbt from the repo root with:
+# The warehouse is a DuckDB file built from the Parquet lake (ingest/lake.py): no server, no
+# secrets. Run dbt from the repo root with:
 #   uv run dbt build --project-dir warehouse --profiles-dir warehouse
 az_prices:
-  target: dev
+  target: duck
   outputs:
-    dev:
-      type: postgres
-      host: "{{ env_var('PGHOST', 'localhost') }}"
-      port: "{{ env_var('PGPORT', '5432') | int }}"
-      user: "{{ env_var('PGUSER', 'pt') }}"
-      password: "{{ env_var('PGPASSWORD', 'pt') }}"
-      dbname: "{{ env_var('PGDATABASE', 'prices') }}"
+    duck:
+      type: duckdb
+      path: "{{ env_var('DUCKDB_PATH', 'data/warehouse.duckdb') }}"
       schema: analytics
-      threads: 4
+      # One model at a time: DuckDB parallelizes each query itself, and concurrent models
+      # on one file raced on table renames ("price_summary__dbt_backup does not exist").
+      threads: 1
+      extensions: [httpfs, aws, json]
+      settings:
+        preserve_insertion_order: false  # less memory for large tables
+        # DuckDB takes 80% of RAM by default; one model once reached 22 GB on a laptop.
+        # Past the limit it spills to disk, next to the database file (<path>.tmp).
+        memory_limit: "{{ env_var('DUCKDB_MEMORY', '6GB') }}"

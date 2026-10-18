@@ -3,20 +3,10 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
-    services:
-      postgres:  # same image as docker-compose.yml; the loader tests run against it
-        image: postgres:16
-        env:
-          POSTGRES_USER: pt
-          POSTGRES_PASSWORD: pt
-          POSTGRES_DB: prices
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U pt -d prices"
-          --health-interval 5s
-          --health-retries 10
     env:
-      DATABASE_URL: postgresql://pt:pt@localhost:5432/prices
+      # The fixtures' lake and warehouse, apart from the default data/ folders.
+      LAKE: /tmp/lake
+      DUCKDB_PATH: /tmp/warehouse.duckdb
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
