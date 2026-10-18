@@ -64,6 +64,7 @@ RAW_DIR = download.RAW_DIR
 REPORTS = "raw/parse_reports"  # one file per save, like the download log
 SAVE_EVERY = 25
 BIG_BYTES = 10**9  # uncompressed; parsed alone, after the rest
+JOB_LIMIT_SECONDS = 60 * 60  # one hospital, download and parse; then its worker is killed
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -145,6 +146,20 @@ def process_one(job: Job, day_dir: Path, keep: bool, started: datetime) -> dict:
         else:
             entry = parse_and_load(job.ccn, job.state, Path(row["path"]), row["id"], keep_file)
     return {"row": row, "started": started, "entry": entry, "state": job.state, "big": big}
+
+
+def timed_out(job: Job) -> dict:
+    started = datetime.now(UTC)
+    row = {"ccn": job.ccn, "url": job.url, "outcome": "failed", "id": source_log.new_id(started),
+           "error": f"not done after {JOB_LIMIT_SECONDS / 60:g} minutes; stopped"}  # fmt: skip
+    return {"row": row, "started": started, "entry": None, "state": job.state, "big": False}
+
+
+def kill(pool: ProcessPoolExecutor) -> None:
+    """Stop every worker now (ProcessPoolExecutor has no way to stop one task)."""
+    for process_ in list(getattr(pool, "_processes", {}).values()):
+        process_.terminate()
+    pool.shutdown(wait=False, cancel_futures=True)
 
 
 def run_alone(job: Job, day_dir: Path, keep: bool) -> dict:
@@ -237,13 +252,27 @@ def run_hospitals(states: list[str], workers: int, limit: int | None, fresh_days
     pool = ProcessPoolExecutor(workers, mp_context=get_context("spawn"))
     try:
         in_flight: dict = {}
+        since: dict = {}
         while queue or in_flight:
             # No more in flight than workers: if one is killed (out of memory), only these
             # can be why, and they're rerun one at a time at the end (run_alone).
             while queue and len(in_flight) < workers:
                 job = queue.popleft()
-                in_flight[pool.submit(process, job, day_dir, keep)] = job
-            finished, _ = wait(in_flight, return_when=FIRST_COMPLETED)
+                f = pool.submit(process, job, day_dir, keep)
+                in_flight[f], since[f] = job, time.monotonic()
+            finished, _ = wait(in_flight, timeout=min(60, JOB_LIMIT_SECONDS),
+                               return_when=FIRST_COMPLETED)  # fmt: skip
+            overdue = [f for f in in_flight if f not in finished
+                       and time.monotonic() - since[f] > JOB_LIMIT_SECONDS]  # fmt: skip
+            if overdue:
+                # A worker can't be stopped alone: stop them all, fail the overdue ones,
+                # and put the others back at the front of the queue.
+                for f in overdue:
+                    finish(timed_out(in_flight.pop(f)))
+                queue.extendleft(j for f, j in in_flight.items() if f not in finished)
+                in_flight = {f: j for f, j in in_flight.items() if f in finished}
+                kill(pool)
+                pool = ProcessPoolExecutor(workers, mp_context=get_context("spawn"))
             try:
                 for f in finished:
                     r = f.result()

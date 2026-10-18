@@ -163,3 +163,45 @@ def test_a_table_with_files_is_left_alone(tmp_path):
     write_hospital(pl.read_parquet(parse_fixture(tmp_path)), "030006", "AZ")
     made = pipeline.ensure_tables()
     assert not any("hospital_charges" in m for m in made)
+
+
+def test_a_hospital_over_the_time_limit_is_stopped_and_the_rest_go_on(tmp_path, monkeypatch):
+    import threading
+    import time as time_
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    body = FIXTURE.read_bytes()
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv")
+            self.end_headers()
+            if self.path.startswith("/slow"):
+                for _ in range(600):  # a trickle: never idle long enough for a read timeout
+                    self.wfile.write(b"x")
+                    self.wfile.flush()
+                    time_.sleep(0.1)
+            else:
+                self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_port}"
+    todo = pl.DataFrame({"ccn": ["999990", "999991"], "state": ["AZ", "AZ"],
+                         "mrf_url": [f"{base}/slow.csv", f"{base}/fast.csv"]})  # fmt: skip
+    monkeypatch.setattr(pipeline, "hospitals_to_run", lambda states: todo)
+    monkeypatch.setattr(pipeline, "JOB_LIMIT_SECONDS", 5)
+    monkeypatch.setattr(pipeline, "RAW_DIR", tmp_path / "raw")
+    monkeypatch.setenv("BROWSER_FALLBACK", "0")
+    try:
+        rows = {r["ccn"]: r for r in pipeline.run_hospitals(["AZ"], 2, None, 7, keep=True)}
+    finally:
+        server.shutdown()
+        for leftover in Path("data/parsed").glob("99999*"):  # the workers' (made-up CCNs)
+            leftover.unlink()
+    assert rows["999990"]["outcome"] == "failed" and "not done after" in rows["999990"]["error"]
+    assert rows["999991"]["outcome"] == "downloaded"

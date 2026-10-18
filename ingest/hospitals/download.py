@@ -51,6 +51,9 @@ CHUNK = 1 << 20  # 1 MiB
 MAX_BYTES = 5 * 10**9
 DOWNLOADS_DIR = Path(os.environ.get("DOWNLOADS_DIR", Path.home() / "Downloads"))
 BROWSER_WAIT_SECONDS = 600
+# A server can send a file a trickle at a time, which a read timeout never catches; the
+# national run had workers held for over half an hour. 5 GB in 30 minutes is ~3 MB/s.
+DOWNLOAD_DEADLINE_SECONDS = 30 * 60
 
 
 class RetryableStatus(Exception):
@@ -83,8 +86,14 @@ def stream_to_gzip(response: httpx.Response, dest: Path) -> tuple[str, int]:
     """Write the body gzip-compressed to dest; return (SHA-256 of the original bytes, size)."""
     digest, size = hashlib.sha256(), 0
     part = dest.with_name(dest.name + ".part")
+    deadline = time.monotonic() + DOWNLOAD_DEADLINE_SECONDS
     with gzip.open(part, "wb", compresslevel=6) as out:
         for chunk in response.iter_bytes(CHUNK):
+            if time.monotonic() > deadline:
+                out.close()
+                part.unlink(missing_ok=True)
+                raise TimeoutError(f"not finished after {DOWNLOAD_DEADLINE_SECONDS // 60} minutes "
+                                   f"({size / 1e6:,.0f} MB so far)")  # fmt: skip
             digest.update(chunk)
             size += len(chunk)
             out.write(chunk)
