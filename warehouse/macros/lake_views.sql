@@ -13,6 +13,10 @@
       'compliance_checks': 'raw/compliance_checks/*.parquet',
       'payer_plans': 'raw/payer_plans/*.parquet',
     } %}
+    {% if lake.startswith('s3://') %}
+      {# The cloud run's credentials (the task role), for read_parquet on S3. #}
+      {% do run_query("create or replace secret lake (type s3, provider credential_chain)") %}
+    {% endif %}
     {% do run_query('create schema if not exists raw') %}
     {% for name, glob in tables.items() %}
       {# A table with no files yet (no downloads in CI) gets no view; read_parquet would fail. #}

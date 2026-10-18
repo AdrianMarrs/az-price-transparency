@@ -14,8 +14,10 @@ a CAPTCHA is never solved: a file still blocked then is reported, for --fetch-in
 visit marks the profile's cookies, and a window sharing them was then refused too (City of
 Hope, October 2026).
 
-Needs Microsoft Edge installed (no Playwright browser download). Turned off with
-BROWSER_FALLBACK=0, and off anywhere Edge or a display is missing (CI, containers).
+Needs Microsoft Edge installed (no Playwright browser download), or BROWSER_CHANNEL=chromium
+for Playwright's own Chromium (the cloud pipeline's image, docker/pipeline.Dockerfile, which
+has no display, so only the headless try runs there). Turned off with BROWSER_FALLBACK=0, and
+off anywhere the browser or a display is missing (CI).
 """
 
 import os
@@ -26,6 +28,12 @@ import httpx
 
 PROFILE_DIR = Path("data/browser-profile")
 WAIT_MS = 90_000  # for the download to start; a bot check can take a few seconds
+
+
+def channel() -> str | None:
+    """Playwright's channel: msedge (the default), or None for its bundled Chromium."""
+    name = os.environ.get("BROWSER_CHANNEL", "msedge")
+    return None if name == "chromium" else name
 
 
 @dataclass
@@ -62,12 +70,12 @@ def fetch_files(jobs: list[tuple[str, str]], dest_dir: Path) -> list[Fetched]:
                 break
             try:
                 context = p.chromium.launch_persistent_context(
-                    str(PROFILE_DIR / mode), channel="msedge", headless=mode == "headless",
+                    str(PROFILE_DIR / mode), channel=channel(), headless=mode == "headless",
                     accept_downloads=True,
                 )  # fmt: skip
             except PlaywrightError as e:  # no Edge, or no display for a window
                 for r in todo:
-                    r.error = f"{mode} Edge would not start: {e.message.splitlines()[0]}"
+                    r.error = f"{mode} browser would not start: {e.message.splitlines()[0]}"
                 continue
             try:
                 page = context.new_page()

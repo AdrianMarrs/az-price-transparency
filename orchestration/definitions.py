@@ -74,9 +74,11 @@ def hospital_lock(ccn: str, run_id: str):
 # ---------- discovery (weekly, not partitioned) ----------
 
 
-@dg.asset(group_name="discovery", description="In-scope hospitals from CMS's general info file")
+@dg.asset(
+    group_name="discovery", description="Every state's hospitals from CMS's general info file"
+)
 def hospital_list_seed(context: dg.AssetExecutionContext) -> dg.MaterializeResult:
-    hospitals, modified = hospital_list.refresh_hospital_list("AZ")
+    hospitals, modified = hospital_list.refresh_hospital_list()
     federal = hospitals.filter(pl.col("federally_run")).height
     return dg.MaterializeResult(
         metadata={

@@ -52,6 +52,11 @@ def read() -> pl.DataFrame:
                      for c, t in SCHEMA.items())  # fmt: skip
 
 
+def new_id(attempted_at: datetime) -> int:
+    """An attempt's id: its time in microseconds."""
+    return int(attempted_at.astimezone(UTC).timestamp() * 1_000_000)
+
+
 def latest(df: pl.DataFrame) -> dict[str, dict]:
     """Each hospital's most recent attempt."""
     newest = df.sort("attempted_at").group_by("ccn").last()
@@ -96,10 +101,10 @@ class Log:
         return LastDownload(r["sha256"], r["path"], r["etag"], r["last_modified"])
 
     def record(self, row: dict, attempted_at: datetime) -> int:
-        """Add one attempt; returns its id."""
+        """Add one attempt; returns its id (row's own, when a worker chose it already)."""
         attempted_at = attempted_at.astimezone(UTC)
-        id_ = int(attempted_at.timestamp() * 1_000_000)
-        while any(r["id"] == id_ for r in self.new):  # two in the same microsecond
+        id_ = row.get("id") or new_id(attempted_at)
+        while not row.get("id") and any(r["id"] == id_ for r in self.new):  # same microsecond
             id_ += 1
         self.new.append({c: row.get(c) for c in SCHEMA} | {"id": id_, "attempted_at": attempted_at})
         return id_

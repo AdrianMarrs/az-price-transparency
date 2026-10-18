@@ -147,14 +147,26 @@ def shoppable_standard_charges() -> dict[str, dict]:
                        "shoppable_with_gross": r["gross"]} for r in df.to_dicts()}  # fmt: skip
 
 
+def parse_reports() -> dict[str, dict]:
+    """Each hospital's latest parse: data/parsed/parse_report.csv (a local run), overridden
+    by raw/parse_reports in the lake (the cloud pipeline's runs, ingest/pipeline.py)."""
+    report = {}
+    if REPORT_PATH.exists():
+        report = {r["ccn"]: r for r in pl.read_csv(REPORT_PATH, infer_schema_length=0).to_dicts()}
+    runs = lake.read("raw/parse_reports/*.parquet")
+    if not runs.is_empty():
+        latest = runs.sort("parsed_at").group_by("ccn").last().drop("parsed_at")
+        report |= {r["ccn"]: {k: v for k, v in r.items() if v is not None}
+                   for r in latest.to_dicts()}  # fmt: skip
+    return report
+
+
 def main() -> pl.DataFrame:
     hospitals = pl.read_csv(HOSPITALS_PATH, infer_schema_length=0).filter(
         pl.col("federally_run") == "false"
     )
     sources = {r["ccn"]: r for r in pl.read_csv(SOURCES_PATH, infer_schema_length=0).to_dicts()}
-    report = {}
-    if REPORT_PATH.exists():
-        report = {r["ccn"]: r for r in pl.read_csv(REPORT_PATH, infer_schema_length=0).to_dicts()}
+    report = parse_reports()
     checked_at = datetime.now(UTC)
 
     downloads = source_log.latest(source_log.read())

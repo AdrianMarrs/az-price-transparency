@@ -1,15 +1,16 @@
 # 03 · Cloud and serving layer
 
-Phase 3 put precomputed answers in DynamoDB behind a Lambda API, with a React site, all defined in Terraform. In October 2026 the API and DynamoDB were replaced by static JSON files served with the site, the first step toward a version for every state at a few dollars a month. Postgres stays the system of record.
+Phase 3 put precomputed answers in DynamoDB behind a Lambda API, with a React site, all defined in Terraform. In October 2026 the API and DynamoDB were replaced by static JSON files served with the site, the first step toward a version for every state at a few dollars a month. The same month Postgres was replaced by a Parquet lake and a DuckDB warehouse (below), and the pipeline was packaged to run in the cloud on Fargate Spot.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    subgraph laptop["Laptop (Docker, Dagster)"]
+    subgraph laptop["Laptop or Fargate Spot task (ingest/pipeline.py)"]
         H[Hospital websites] -->|download| P[Python: find, download, parse]
-        P --> PG[(Postgres + dbt)]
-        PG -->|changed files| X[export_static]
+        P --> L[(Parquet lake)]
+        L --> DB[(DuckDB + dbt)]
+        DB -->|changed files| X[export_static]
     end
     subgraph aws["AWS us-east-2 (Terraform: infra/)"]
         S3D[(S3 data bucket<br/>raw/ 7 days, parquet/)]
@@ -24,10 +25,30 @@ flowchart LR
 
 | Piece | Where | Defined in |
 | --- | --- | --- |
-| Download, parse, warehouse, export | Laptop, scheduled by Dagster (Mondays) | `ingest/`, `warehouse/`, `serving/`, `orchestration/` |
+| Download, parse, warehouse, export | Laptop (Dagster, schedules off), or a Fargate Spot task for whole states | `ingest/`, `warehouse/`, `serving/`, `orchestration/`, `infra/main/pipeline_run.tf` |
+| Parquet lake | `data/lake` locally; `lake/` in the data bucket in the cloud | `ingest/lake.py` |
 | Raw and Parquet copies | S3 data bucket | `infra/main/data_bucket.tf` |
 | Site and its data files | S3 + CloudFront, one domain | `web/`, `serving/export_static.py`, `infra/main/site.tf` |
 | Terraform state, deploy role | S3 (state bucket) | `infra/bootstrap/` |
+
+## Warehouse: a Parquet lake and DuckDB
+
+Until October 2026 the raw tables were in Postgres (3.7 GB of hospital prices, 2.1 GB of insurer rates for Arizona). At every state that would be a server holding roughly 60 times as much, running all the time. Now:
+
+- **The lake** (`ingest/lake.py`): every raw table is Parquet files, a folder per hospital (`raw/hospital_charges/state=AZ/ccn=030006/`), per insurer network, and one file per download run, compliance run and so on. The same Arizona rows are 75 MB (51 MB hospital, 24 MB insurer). A writer replaces a hospital's folder whole, so a rerun never leaves half of one. `LAKE` is a folder or an S3 prefix; the code is the same.
+- **The warehouse** is a DuckDB file built by dbt (`dbt-duckdb`) from views over the lake, created when a run starts. Nothing runs between builds. A full Arizona build takes about 6 minutes with DuckDB capped at 6 GB (`DUCKDB_MEMORY`); past the cap it spills to disk.
+- **Same answers:** the site's 13,339 files built from DuckDB were compared with the live ones built from Postgres: 13,237 identical, and the other 102 pick a different one of two tied values (a service's most common description or a price's methodology; Postgres sorts text by locale, DuckDB by bytes). Medians are rounded as decimals, as Postgres did, not as doubles (16499.975 is 16499.97499... as a double).
+- **Changes for DuckDB:** small macros for Postgres-only functions (`~*`, `initcap`), JSON built with DuckDB's functions, and `srv_service_prices`, a long table of each hospital's prices per service, from which `export_static.py` assembles each service's file. Building every file's JSON in SQL needed more memory than DuckDB could spill.
+
+## Hospital pipeline on Fargate Spot
+
+`ingest/pipeline.py` runs whole states in one process: for each in-scope hospital with a price file URL it downloads, parses and writes to the lake, then deletes the local copies (the raw file is kept in the data bucket for 7 days), so the disk holds only files in progress. Then compliance checks, payer plans, dbt build and each state's site files. Four worker processes; files over 1 GB are parsed afterwards one at a time, each in a fresh process, so one that runs out of memory fails alone. A file refused with a 403 is retried in headless Chromium.
+
+`infra/main/pipeline_run.tf` (written October 2026, **not yet applied**): an image (`docker/pipeline.Dockerfile`, x86-64, since Fargate Spot doesn't run ARM64), a 4 vCPU / 30 GB task with 100 GB of disk, roles limited to the lake, the raw copies and the site's `data/` files, and a weekly schedule created **disabled**. A run is started by hand with the `pipeline_run_command` output.
+
+- **Spot:** billed per second at well below on-demand, but AWS can stop the task with two minutes' notice. The download log and parse results are saved every 25 hospitals and on the stop signal, and a rerun skips hospitals downloaded in the last 7 days whose rows are in the lake.
+- **Trial:** 6 Utah hospitals on the laptop with two workers (`--limit`, a scratch lake): 6 downloaded and parsed (4 MB to 729 MB files, 0.4 to 1.7 million prices each) in under a minute, and the rerun skipped the 3 already done.
+- **Memory:** parsing Arizona's largest files (0.5 GB) peaks at 2.8 to 3.4 GB each.
 
 ## Static data files
 

@@ -29,7 +29,7 @@ docker compose up web                                  # the site at localhost:5
 cd web; npm ci; npm run dev                            # the same without Docker
 ```
 
-Design notes, one per phase: [setup](docs/00-setup.md), [hospital files](docs/01-hospitals.md), [every Arizona hospital](docs/02-arizona.md), [cloud](docs/03-cloud.md), [insurer files](docs/04-insurer.md).
+Design notes, one per phase: [setup](docs/00-setup.md), [hospital files](docs/01-hospitals.md), [every Arizona hospital](docs/02-arizona.md), [cloud](docs/03-cloud.md), [insurer files](docs/04-insurer.md), [every state](docs/05-national.md).
 
 ## What it does
 

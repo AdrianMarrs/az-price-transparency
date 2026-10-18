@@ -1,0 +1,12 @@
+# Only what docker/pipeline.Dockerfile copies; no data, caches or dbt build output.
+*
+!pyproject.toml
+!uv.lock
+!.python-version
+!ingest/
+!serving/
+!warehouse/
+warehouse/target/
+warehouse/logs/
+warehouse/dbt_packages/
+**/__pycache__

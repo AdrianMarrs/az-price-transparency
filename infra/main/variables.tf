@@ -32,3 +32,9 @@ variable "site_domain_live" {
   type        = bool
   default     = true # certificate issued October 2026
 }
+
+variable "pipeline_schedule_enabled" {
+  description = "Run the hospital pipeline weekly. Off: the initial pass is kept as it is."
+  type        = bool
+  default     = false
+}

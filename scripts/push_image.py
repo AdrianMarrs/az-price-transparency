@@ -1,9 +1,13 @@
-"""Build the insurer-run image for Linux/ARM64 and push it to ECR.
+"""Build a task image and push it to ECR.
 
 Usage:
-    uv run python scripts/push_image.py <repository URL>   # terraform output insurer_image_repository
+    uv run python scripts/push_image.py <repository URL>            # the insurer run
+    uv run python scripts/push_image.py pipeline <repository URL>   # the hospital pipeline
 
-Tags it with the current git commit and `latest`; the task definition runs `latest`.
+terraform output insurer_image_repository / pipeline_image_repository give the URLs. The
+insurer run is Linux/ARM64 (Graviton, cheaper); the pipeline is x86-64, since Fargate Spot
+doesn't run ARM64. Tags it with the current git commit and `latest`; the task definitions
+run `latest`.
 Needs Docker (with buildx) and an AWS login (AWS_PROFILE).
 """
 
@@ -18,6 +22,11 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import boto3
+
+IMAGES = {
+    "insurer": ("docker/insurer.Dockerfile", "linux/arm64", ["ingest"]),
+    "pipeline": ("docker/pipeline.Dockerfile", "linux/amd64", ["ingest", "serving", "warehouse"]),
+}
 
 
 def tags(repository: str, commit: str) -> list[str]:
@@ -58,16 +67,20 @@ def throwaway_docker_config(registry_host: str, token: str) -> Iterator[str]:
 
 
 def main() -> None:
-    if len(sys.argv) != 2:
+    args = sys.argv[1:]
+    if len(args) == 1:
+        args = ["insurer", *args]
+    if len(args) != 2 or args[0] not in IMAGES:
         sys.exit(__doc__)
-    repository = sys.argv[1]
+    name, repository = args
+    dockerfile, platform, sources = IMAGES[name]
     commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
-    if subprocess.run(["git", "diff", "--quiet", "HEAD", "--", "ingest"], check=False).returncode:
+    if subprocess.run(["git", "diff", "--quiet", "HEAD", "--", *sources], check=False).returncode:
         commit += "-dirty"
     ecr = boto3.client("ecr", region_name=region(repository))
     token = ecr.get_authorization_token()["authorizationData"][0]["authorizationToken"]
-    build = ["docker", "buildx", "build", "--platform", "linux/arm64",
-             "-f", "docker/insurer.Dockerfile", "--push", "--provenance=false"]  # fmt: skip
+    build = ["docker", "buildx", "build", "--platform", platform,
+             "-f", dockerfile, "--push", "--provenance=false"]  # fmt: skip
     for tag in tags(repository, commit):
         build += ["-t", tag]
     with throwaway_docker_config(registry(repository), token) as config:

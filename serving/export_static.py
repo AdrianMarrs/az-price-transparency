@@ -218,6 +218,23 @@ def invalidate(distribution_id: str, state: str = STATE, client=None) -> str:
     return response["Invalidation"]["Id"]
 
 
+def export_states(states: list[str], bucket: str | None = None) -> dict[str, dict]:
+    """Upload each state's files to SITE_BUCKET (and clear them from the cache when
+    SITE_DISTRIBUTION_ID is set); returns the counts by state."""
+    bucket = bucket or os.environ["SITE_BUCKET"]
+    distribution = os.environ.get("SITE_DISTRIBUTION_ID")
+    found = {}
+    with duckdb.connect(WAREHOUSE, read_only=True) as conn:
+        for state in (s.lower() for s in states):
+            counts = sync(build(conn, state), bucket, state)
+            if distribution and (counts["put"] or counts["deleted"]):
+                counts["invalidation"] = invalidate(distribution, state)
+            print(f"{state}: {counts['files']:,} files; uploaded {counts['put']:,}, "
+                  f"deleted {counts['deleted']:,}")  # fmt: skip
+            found[state] = counts
+    return found
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--dry-run", action="store_true", help="count what would change")

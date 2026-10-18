@@ -23,7 +23,7 @@ def test_definitions_load():
 
 def test_one_partition_per_in_scope_hospital():
     assert hospital_partitions.get_partition_keys() == sorted(in_scope_hospitals()["ccn"])
-    assert len(hospital_partitions.get_partition_keys()) == 95
+    assert len(hospital_partitions.get_partition_keys()) == in_scope_hospitals().height
 
 
 def test_dbt_sources_are_fed_by_the_python_assets():
@@ -50,7 +50,7 @@ def test_weekly_schedule_requests_one_run_per_hospital():
     requests = schedule.evaluate_tick(context)
     keys = [r.partition_key for r in requests.run_requests]
     assert sorted(keys) == hospital_partitions.get_partition_keys()
-    assert len({r.run_key for r in requests.run_requests}) == 95
+    assert len({r.run_key for r in requests.run_requests}) == in_scope_hospitals().height
 
 
 def test_static_export_follows_the_serving_models():

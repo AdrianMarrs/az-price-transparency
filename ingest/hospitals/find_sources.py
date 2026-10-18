@@ -5,7 +5,8 @@ Usage:
 
 Reads warehouse/seeds/hospital_websites.csv (hand-curated: each hospital's website and
 the location name its cms-hpt.txt uses) and writes warehouse/seeds/hospital_sources.csv,
-one row per hospital with the file's URLs and a status. A status other than "found" is
+one row per hospital with the file's URLs and a status. Rows for hospitals not in the
+websites seed (other states', from ingest.national.seeds) are kept as they are. A status other than "found" is
 a compliance finding: CMS requires the file at the website root, readable by machines.
 
 Contact names and emails in cms-hpt.txt are left out on purpose; the repo is public.
@@ -143,7 +144,13 @@ def main() -> None:
             rows.append(row | {"website_source": s["website_source"]})
 
     out = pl.DataFrame(rows).with_columns(pl.lit(checked_at).alias("checked_at")).sort("ccn")
-    out.write_csv(OUTPUT_PATH)
+    if OUTPUT_PATH.exists():
+        others = pl.read_csv(OUTPUT_PATH, infer_schema_length=0).filter(
+            ~pl.col("ccn").is_in(out["ccn"].to_list())
+        )
+        pl.concat([out, others.select(out.columns)]).sort("ccn").write_csv(OUTPUT_PATH)
+    else:
+        out.write_csv(OUTPUT_PATH)
     for r in out.iter_rows(named=True):
         print(f"{r['ccn']}  {r['status']:22} {r['location_name'] or '-'}")
     print(out["status"].value_counts(sort=True))

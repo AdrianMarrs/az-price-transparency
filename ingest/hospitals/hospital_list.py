@@ -1,9 +1,9 @@
 """Build the hospital list seed from CMS's Hospital General Information file.
 
 Usage:
-    uv run python -m ingest.hospitals.hospital_list --state AZ --county PIMA
+    uv run python -m ingest.hospitals.hospital_list [--state AZ] [--county PIMA]
 
-Writes warehouse/seeds/hospitals.csv. Federally run hospitals (VA, Indian Health
+Writes warehouse/seeds/hospitals.csv: every state, or one with --state. Federally run hospitals (VA, Indian Health
 Service, tribal, military) are kept but flagged, because the price transparency
 rule does not apply to them the same way.
 """
@@ -62,16 +62,20 @@ def download(client: httpx.Client, url: str, dest: Path) -> None:
                 f.write(chunk)
 
 
-def build_hospital_list(raw: pl.DataFrame, state: str, county: str | None) -> pl.DataFrame:
-    df = raw.select(list(COLUMNS)).rename(COLUMNS).filter(pl.col("state") == state.upper())
+def build_hospital_list(raw: pl.DataFrame, state: str | None, county: str | None) -> pl.DataFrame:
+    df = raw.select(list(COLUMNS)).rename(COLUMNS)
+    if state:
+        df = df.filter(pl.col("state") == state.upper())
     if county:
         df = df.filter(pl.col("county").str.to_uppercase() == county.upper())
     return df.with_columns(
         pl.col("ownership").is_in(FEDERAL_OWNERSHIP).alias("federally_run")
-    ).sort("city", "name")
+    ).sort("state", "city", "name")
 
 
-def refresh_hospital_list(state: str = "AZ", county: str | None = None) -> tuple[pl.DataFrame, str]:
+def refresh_hospital_list(
+    state: str | None = None, county: str | None = None
+) -> tuple[pl.DataFrame, str]:
     """Download the current CMS file and rewrite the hospitals seed; returns (seed, modified)."""
     with httpx.Client(timeout=60, follow_redirects=True) as client:
         url, modified = current_download_url(client)
@@ -86,7 +90,7 @@ def refresh_hospital_list(state: str = "AZ", county: str | None = None) -> tuple
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--state", default="AZ")
+    parser.add_argument("--state", help="one state (default: every state)")
     parser.add_argument("--county", help="optional, e.g. PIMA")
     args = parser.parse_args()
 

@@ -271,7 +271,10 @@ def discover(states: list[str] | None = None, refresh: bool = False) -> pl.DataF
     for h in hosp.iter_rows(named=True):
         row = match_hospital(h, roots.get(h["ccn"]), fetched, index)
         rows.append(row | {"website_source": sources.get(h["ccn"], "")})
-    out = pl.DataFrame(rows, infer_schema_length=None)
+    checked_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    out = pl.DataFrame(rows, infer_schema_length=None).with_columns(
+        pl.lit(checked_at).alias("checked_at")
+    )
     out.write_parquet(OUT / "sources.parquet")
     print(f"{out.height:,} hospitals, {len(fetched):,} websites, {time.time() - started:.0f}s")
     return out
