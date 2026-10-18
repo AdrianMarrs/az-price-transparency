@@ -11,14 +11,16 @@ data/raw/<yyyy-mm-dd>/<ccn>_<file name>.gz. Every attempt is recorded in raw.sou
 Nothing new is kept when the server says the file hasn't changed (ETag / Last-Modified)
 or when its checksum matches the last download.
 
---import-file takes a file downloaded by hand in a browser, for price files that refuse
-programs (a bot challenge), and stores and records it the same way with access
-manual_download. Compliance still counts the download rule as failed for these.
+A file refused with a 403 (a bot check that turns away programs) is then fetched with a
+real browser, Edge driven by Playwright (ingest/hospitals/browser.py), and recorded with
+access browser_download. Compliance still counts the download rule as failed for these.
 
---fetch-in-browser does that hand download for you, when you run it: it opens each blocked
-price file's URL in your default browser, waits for the file to land in your Downloads
-folder, and imports it. By default it covers every hospital imported by hand before. It is
-never scheduled: the pipeline itself does not work around bot challenges.
+--import-file takes a file downloaded by hand in a browser, for one the automated browser
+can't get either (a CAPTCHA), and records it with access manual_download.
+
+--fetch-in-browser helps with that hand download: it opens each blocked price file's URL in
+your default browser, waits for the file to land in your Downloads folder, and imports it.
+By default it covers every hospital fetched by a browser before.
 """
 
 import argparse
@@ -36,6 +38,7 @@ import httpx
 import polars as pl
 import psycopg
 
+from ingest.hospitals import browser
 from ingest.hospitals.find_sources import BROWSER_USER_AGENT, USER_AGENT
 from ingest.storage import upload
 
@@ -58,7 +61,7 @@ CREATE TABLE IF NOT EXISTS raw.source_files (
     url           text        NOT NULL,
     attempted_at  timestamptz NOT NULL,
     outcome       text        NOT NULL,  -- downloaded, unchanged, failed
-    access        text,                  -- direct, browser_ua_only, manual_download
+    access        text,                  -- direct, browser_ua_only, browser_download, manual_download
     http_status   int,
     format        text,
     sha256        text,
@@ -204,7 +207,8 @@ def record(conn: psycopg.Connection, row: dict, attempted_at: datetime) -> None:
     )
 
 
-def import_file(ccn: str, src: Path, url: str, day_dir: Path) -> dict:
+def import_file(ccn: str, src: Path, url: str, day_dir: Path,
+                access: str = "manual_download") -> dict:  # fmt: skip
     """Store a file downloaded by hand as data/raw/<day>/<ccn>_<name>.gz; returns its row.
     The name comes from the URL when there is one, since a browser renames a repeat
     download ("file (1).zip")."""
@@ -219,12 +223,12 @@ def import_file(ccn: str, src: Path, url: str, day_dir: Path) -> dict:
             size += len(chunk)
             out.write(chunk)
     part.replace(dest)
-    return {"ccn": ccn, "url": url, "outcome": "downloaded", "access": "manual_download",
+    return {"ccn": ccn, "url": url, "outcome": "downloaded", "access": access,
             "format": file_format(src.name, ""), "sha256": digest.hexdigest(),
             "size_bytes": size, "path": dest.as_posix()}  # fmt: skip
 
 
-def import_manual(ccn: str, src: Path) -> dict:
+def import_manual(ccn: str, src: Path, access: str = "manual_download") -> dict:
     """import_file for one hospital, using its price file URL from the sources seed."""
     sources = pl.read_csv(SOURCES_PATH, infer_schema_length=0).filter(pl.col("ccn") == ccn)
     if sources.is_empty():
@@ -237,7 +241,7 @@ def import_manual(ccn: str, src: Path) -> dict:
     with psycopg.connect(DATABASE_URL, autocommit=True) as conn:
         conn.execute(SCHEMA_SQL)
         last = last_download(conn, ccn, url)
-        row = import_file(ccn, src, url, RAW_DIR / started.strftime("%Y-%m-%d"))
+        row = import_file(ccn, src, url, RAW_DIR / started.strftime("%Y-%m-%d"), access)
         if last and last.sha256 == row["sha256"] and Path(last.path).exists():
             if Path(row["path"]) != Path(last.path):
                 Path(row["path"]).unlink()  # same bytes as last time: keep the earlier copy
@@ -290,7 +294,8 @@ def fetch_in_browser(ccns: list[str] | None = None) -> list[dict]:
         with psycopg.connect(DATABASE_URL, autocommit=True) as conn:
             conn.execute(SCHEMA_SQL)
             ccns = [r[0] for r in conn.execute(
-                "SELECT DISTINCT ccn FROM raw.source_files WHERE access = 'manual_download'"
+                """SELECT DISTINCT ccn FROM raw.source_files
+                   WHERE access IN ('manual_download', 'browser_download')"""
             ).fetchall()]  # fmt: skip
     if not ccns:
         raise SystemExit("no hospital has been imported by hand yet; name them with --ccn")
@@ -337,7 +342,26 @@ def download_hospitals(ccns: list[str] | None = None) -> list[dict]:
             detail = row.get("error") or row.get("path", "")
             print(f"{s['ccn']}  {row['outcome']:10} {size:>8} {seconds:6.0f}s  {detail}")
             rows.append(row | {"seconds": seconds})
+    blocked = [r for r in rows if r["outcome"] == "failed" and r.get("http_status") == 403]
+    if blocked and browser.enabled():
+        fetched = {r["ccn"]: r for r in fetch_blocked(blocked)}
+        rows = [fetched.get(r["ccn"], r) if r in blocked else r for r in rows]
     return rows
+
+
+def fetch_blocked(rows: list[dict]) -> list[dict]:
+    """Fetch files refused with a 403 using a real browser, and import what it gets."""
+    print(f"{len(rows)} refused programs; trying them in Edge")
+    tmp = RAW_DIR / "browser"
+    out = []
+    for f in browser.fetch_files([(r["ccn"], r["url"]) for r in rows], tmp):
+        if f.path is None:
+            print(f"{f.ccn}  still blocked in a browser ({f.error}); see --fetch-in-browser")
+            continue
+        out.append(import_manual(f.ccn, f.path, access="browser_download") | {"mode": f.mode})
+        f.path.unlink(missing_ok=True)
+        f.path.parent.rmdir()
+    return out
 
 
 def main() -> None:

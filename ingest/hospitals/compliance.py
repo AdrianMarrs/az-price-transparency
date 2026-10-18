@@ -79,6 +79,8 @@ def check_hospital(source: dict, download: dict | None, parse: dict | None, toda
         ok = download["outcome"] in ("downloaded", "unchanged", "skipped_too_large")
         if download.get("access") == "manual_download":  # programs are refused it
             ok, download = False, {"outcome": "blocked for programs; downloaded by hand"}
+        elif download.get("access") == "browser_download":
+            ok, download = False, {"outcome": "blocked for programs; downloaded with a browser"}
         checks.append(("price_file_downloads", ok, download.get("error") or download["outcome"]))
 
     if parse is None or parse.get("outcome") == "deferred_too_large":

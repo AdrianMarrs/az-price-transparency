@@ -104,3 +104,9 @@ def test_no_shoppable_services_leaves_the_standard_charge_rules_unchecked():
     v = verdicts(FOUND, DOWNLOADED, GOOD_PARSE | {"shoppable_services": 0})
     assert v["shoppable_cash_prices"] is None
     assert v["shoppable_list_prices"] is None
+
+
+def test_a_browser_download_still_fails_the_download_rule():
+    v = verdicts(FOUND, DOWNLOADED | {"access": "browser_download"}, GOOD_PARSE)
+    assert v["price_file_downloads"] is False
+    assert v["payer_prices_present"] is True

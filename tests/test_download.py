@@ -192,3 +192,33 @@ def test_wait_for_download_gives_up(tmp_path, monkeypatch):
     monkeypatch.setattr(download_module, "DOWNLOADS_DIR", tmp_path)
     monkeypatch.setattr(download_module, "BROWSER_WAIT_SECONDS", 0)
     assert wait_for_download("a_standardcharges.zip", since=0) is None
+
+
+def test_files_refused_with_403_are_fetched_with_a_browser(tmp_path, monkeypatch):
+    from ingest.hospitals import browser
+
+    got = tmp_path / "1" / "prices.zip"
+    got.parent.mkdir()
+    got.write_bytes(BODY)
+    fetched = [browser.Fetched("1", URL, path=got, mode="headed"),
+               browser.Fetched("2", URL, error="headed: Attention Required! | Cloudflare")]  # fmt: skip
+    monkeypatch.setattr(browser, "fetch_files", lambda jobs, dest: fetched)
+    imported = []
+
+    def fake_import(ccn, src, access="manual_download"):
+        imported.append((ccn, src.read_bytes(), access))
+        return {"ccn": ccn, "outcome": "downloaded", "access": access}
+
+    monkeypatch.setattr(download_module, "import_manual", fake_import)
+    rows = download_module.fetch_blocked([{"ccn": "1", "url": URL}, {"ccn": "2", "url": URL}])
+    assert imported == [("1", BODY, "browser_download")]
+    assert rows == [{"ccn": "1", "outcome": "downloaded", "access": "browser_download",
+                     "mode": "headed"}]  # fmt: skip
+    assert not got.parent.exists()  # the browser's copy is removed once imported
+
+
+def test_browser_fallback_can_be_turned_off(monkeypatch):
+    from ingest.hospitals import browser
+
+    monkeypatch.setenv("BROWSER_FALLBACK", "0")
+    assert browser.enabled() is False
