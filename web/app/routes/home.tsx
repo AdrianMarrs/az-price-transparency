@@ -66,7 +66,7 @@ export default function Home() {
           {[
             [hospitals.length.toString(), "Arizona hospitals covered", "Every non-federal hospital in the state"],
             [withPrices.toString(), "Publish prices we can read", "Machine-readable files, parsed weekly"],
-            [`${meetsAll} of ${scored.length}`, "Meet every rule we check", "Federal price transparency requirements"],
+            [`${meetsAll} of ${scored.length}`, "Are 100% transparent", "Meet every federal rule we can check"],
           ].map(([value, label, note]) => (
             <div key={label} className="bg-card px-6 py-5">
               <dt className="text-sm text-muted-foreground">{label}</dt>

@@ -92,7 +92,7 @@ export default function Hospitals() {
                   <span className="block text-sm text-muted-foreground">{titleCase(h.city)}</span>
                 </TableCell>
                 <TableCell className="hidden text-muted-foreground md:table-cell">{h.hospital_type}</TableCell>
-                <TableCell className="text-right tabular">{h.services ? h.services.toLocaleString() : "â€”"}</TableCell>
+                <TableCell className="text-right tabular">{h.services ? h.services.toLocaleString() : "—"}</TableCell>
                 <TableCell className="pr-5"><ScoreBadge score={h.score_pct} /></TableCell>
               </TableRow>
             ))}

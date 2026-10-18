@@ -44,6 +44,25 @@ describe("summarize", () => {
   });
 });
 
+describe("placeholders", () => {
+  it("leaves $1 stand-ins out of the median and range but keeps them in the list", () => {
+    const withOnes: HospitalPrices = {
+      ...row,
+      prices: [
+        ...row.prices,
+        ...[1, 1, 0.01].map((amount) => ({ payer: "UHC", plan: "Commercial", group: "UnitedHealthcare", market: "commercial", setting: "outpatient", type: "negotiated_dollar", amount, n: 1 })),
+      ],
+    };
+    const s = summarize(withOnes, ALL);
+    expect(s.insurerMedian).toBeCloseTo((1421.79 + 167) / 2);
+    expect(s.insurerRange).toEqual({ low: 167, high: 1421.79 });
+    expect(s.dollarPrices).toBe(2);
+    expect(s.placeholders).toBe(3);
+    expect(s.otherPrices).toBe(1);
+    expect(s.prices).toHaveLength(6);
+  });
+});
+
 describe("helpers", () => {
   it("takes the median of odd and even counts", () => {
     expect(median([3, 1, 2])).toBe(2);

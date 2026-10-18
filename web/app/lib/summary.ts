@@ -19,7 +19,8 @@ export type Summary = {
   gross: Range;
   insurerMedian: number | null;
   insurerRange: Range;
-  dollarPrices: number; // insurer prices given in dollars
+  dollarPrices: number; // insurer prices given in dollars (placeholders not counted)
+  placeholders: number; // $1-or-less stand-ins: see isPlaceholder
   otherPrices: number; // insurer prices given as a percentage or formula
   prices: Price[]; // the insurer prices that pass the filters
 };
@@ -46,6 +47,15 @@ function range(values: number[]): Range {
   return { low: Math.min(...values), high: Math.max(...values) };
 }
 
+// Some files list an insurer's price for a procedure as $1 (or $0.01): a stand-in meaning
+// "paid as part of a case rate", not a price anyone pays. Counted, they made Abrazo's
+// colonoscopy median $239 instead of $1,321, so they're shown but left out of the numbers.
+export const PLACEHOLDER_MAX = 1;
+
+export function isPlaceholder(price: Price): boolean {
+  return price.type === "negotiated_dollar" && price.amount != null && price.amount <= PLACEHOLDER_MAX;
+}
+
 // A price listed for "both" settings applies to outpatient and inpatient alike.
 export function inSetting(price: Price, setting: Setting): boolean {
   return setting === "any" || !price.setting || price.setting === setting || price.setting === "both";
@@ -66,8 +76,9 @@ export function summarize(row: HospitalPrices, f: Filters): Summary {
   const amounts = (type: string) =>
     standard.filter((p) => p.type === type && p.amount != null).map((p) => p.amount!);
   const prices = row.prices.filter((p) => matchesFilters(p, f));
+  const placeholders = prices.filter(isPlaceholder).length;
   const dollars = prices
-    .filter((p) => p.type === "negotiated_dollar" && p.amount != null)
+    .filter((p) => p.type === "negotiated_dollar" && p.amount != null && !isPlaceholder(p))
     .map((p) => p.amount!);
   return {
     cash: range(amounts("discounted_cash")),
@@ -75,7 +86,8 @@ export function summarize(row: HospitalPrices, f: Filters): Summary {
     insurerMedian: median(dollars),
     insurerRange: range(dollars),
     dollarPrices: dollars.length,
-    otherPrices: prices.length - dollars.length,
+    placeholders,
+    otherPrices: prices.length - dollars.length - placeholders,
     prices,
   };
 }

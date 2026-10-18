@@ -13,7 +13,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip
 import { comparePrices, type Compare, type Service } from "~/lib/api";
 import { serviceApiId } from "~/lib/catalog";
 import {
-  compareRows, MARKETS, money, moneyRange, summarize, titleCase,
+  compareRows, isPlaceholder, MARKETS, money, moneyRange, summarize, titleCase,
   type Filters, type Range, type Setting, type Summary,
 } from "~/lib/summary";
 import { cn } from "~/lib/utils";
@@ -149,7 +149,8 @@ function StaticTable({ rows }: { rows: CompactRow[] }) {
   return (
     <>
       <Explainer />
-      <Card className="mt-6 py-0">
+      <NoCashNotice total={rows.length} missing={rows.filter((r) => !r.cash).length} />
+      <Card className="mt-3 py-0">
         <Table>
           <PriceTableHead />
           <TableBody>
@@ -161,8 +162,8 @@ function StaticTable({ rows }: { rows: CompactRow[] }) {
                   <CashOnPhones cash={r.cash} />
                 </TableCell>
                 <TableCell className="hidden text-right tabular text-muted-foreground md:table-cell">{moneyRange(r.insurerRange)}</TableCell>
-                <TableCell className="hidden text-right tabular sm:table-cell">{moneyRange(r.cash)}</TableCell>
-                <TableCell className="hidden text-right tabular text-muted-foreground lg:table-cell">{moneyRange(r.gross)}</TableCell>
+                <TableCell className="hidden text-right tabular sm:table-cell"><StandardPrice range={r.cash} /></TableCell>
+                <TableCell className="hidden text-right tabular text-muted-foreground lg:table-cell"><StandardPrice range={r.gross} /></TableCell>
                 <TableCell className="hidden pr-5 sm:table-cell"><ScoreBadge score={r.score_pct} /></TableCell>
               </TableRow>
             ))}
@@ -192,6 +193,34 @@ function PriceTableHead() {
 function CashOnPhones({ cash }: { cash: Range }) {
   if (!cash) return null;
   return <span className="block text-xs font-normal text-muted-foreground sm:hidden">Cash {moneyRange(cash)}</span>;
+}
+
+// A hospital's own cash or list price. Many files leave both blank for a procedure.
+function StandardPrice({ range }: { range: Range }) {
+  if (range) return <>{moneyRange(range)}</>;
+  return <span className="text-xs text-muted-foreground">Not published</span>;
+}
+
+// Without this, blank Cash and List price columns read as missing data. They're blank in
+// the hospitals' own files: a procedure charged as separate items (room, supplies, recovery)
+// often has one price only in insurer contracts.
+function NoCashNotice({ total, missing }: { total: number; missing: number }) {
+  if (missing === 0) return null;
+  return (
+    <div className="mt-3 flex gap-2.5 rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+      <Info aria-hidden className="mt-0.5 size-4 shrink-0" />
+      <p className="text-pretty">
+        <span className="font-medium text-foreground">
+          {missing === total
+            ? `None of ${total === 1 ? "this hospital" : `these ${total} hospitals`} publish${total === 1 ? "es" : ""} a cash price for this service.`
+            : `${missing} of these ${total} hospitals don't publish a cash price for this service.`}
+        </span>{" "}
+        Their price files list only what each insurer pays and leave the cash and list price
+        blank, often because the hospital charges a procedure as separate items (the room,
+        supplies, recovery). Ask the hospital for a self-pay estimate.
+      </p>
+    </div>
+  );
 }
 
 function HospitalName({ ccn, name, city }: { ccn: string; name?: string; city?: string }) {
@@ -251,6 +280,7 @@ function Interactive({ data: d, filters, set }: {
           <p className="mt-6 text-sm text-muted-foreground" aria-live="polite">
             {rows.length} hospital{rows.length === 1 ? "" : "s"}, lowest insurer median first
           </p>
+          <NoCashNotice total={rows.length} missing={rows.filter((r) => !r.summary.cash).length} />
           <Card className="mt-3 py-0">
             <Table>
               <PriceTableHead />
@@ -280,32 +310,38 @@ function HospitalRow({ row, summary }: { row: Compare["hospitals"][number]; summ
   const [open, setOpen] = useState(false);
   const h = row.hospital;
   const detailId = `detail-${h.ccn}`;
+  const count = summary.prices.length;
   return (
     <Fragment>
-      <TableRow className={cn(open && "border-b-0 bg-muted/40")}>
+      <TableRow
+        className={cn(count > 0 && "cursor-pointer", open && "border-b-0 bg-muted/40")}
+        onClick={(e) => {
+          // The whole row opens the plan list; its link and button do their own thing.
+          if (count > 0 && !(e.target as HTMLElement).closest("a, button")) setOpen(!open);
+        }}
+      >
         <TableCell className="min-w-40 whitespace-normal pl-5">
-          <div className="flex items-start gap-2">
+          <HospitalName ccn={h.ccn} name={h.name} city={h.city} />
+          {count > 0 && (
             <button
               type="button"
               aria-expanded={open}
               aria-controls={detailId}
-              aria-label={`${open ? "Hide" : "Show"} every plan's price at ${titleCase(h.name)}`}
               onClick={() => setOpen(!open)}
-              className="mt-0.5 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+              className="mt-1 inline-flex items-center gap-1 rounded text-xs font-medium text-primary hover:underline"
             >
-              <ChevronDown aria-hidden className={cn("size-4 transition-transform", open && "rotate-180")} />
+              {open ? "Hide" : "See"} {count} insurer price{count === 1 ? "" : "s"}
+              <ChevronDown aria-hidden className={cn("size-3.5 transition-transform", open && "rotate-180")} />
             </button>
-            <HospitalName ccn={h.ccn} name={h.name} city={h.city} />
-          </div>
+          )}
         </TableCell>
         <TableCell className="text-right tabular font-medium">
           {money(summary.insurerMedian)}
-          {summary.dollarPrices > 0 && <span className="block text-xs font-normal text-muted-foreground">{summary.dollarPrices} price{summary.dollarPrices === 1 ? "" : "s"}</span>}
           <CashOnPhones cash={summary.cash} />
         </TableCell>
         <TableCell className="hidden text-right tabular text-muted-foreground md:table-cell">{moneyRange(summary.insurerRange)}</TableCell>
-        <TableCell className="hidden text-right tabular sm:table-cell">{moneyRange(summary.cash)}</TableCell>
-        <TableCell className="hidden text-right tabular text-muted-foreground lg:table-cell">{moneyRange(summary.gross)}</TableCell>
+        <TableCell className="hidden text-right tabular sm:table-cell"><StandardPrice range={summary.cash} /></TableCell>
+        <TableCell className="hidden text-right tabular text-muted-foreground lg:table-cell"><StandardPrice range={summary.gross} /></TableCell>
         <TableCell className="hidden pr-5 sm:table-cell"><ScoreBadge score={h.score_pct} /></TableCell>
       </TableRow>
       {open && (
@@ -324,6 +360,14 @@ function PlanPrices({ summary }: { summary: Summary }) {
     return <p className="py-3 text-sm text-muted-foreground">No insurer prices match these filters.</p>;
   }
   return (
+    <>
+    {summary.placeholders > 0 && (
+      <p className="pb-2 text-xs text-muted-foreground text-pretty">
+        {summary.placeholders} of these {summary.placeholders === 1 ? "is a placeholder" : "are placeholders"} of
+        $1 or less, which files use for “paid as part of a case rate”. They aren't real prices, so
+        they're left out of the median and range.
+      </p>
+    )}
     <div className="overflow-x-auto rounded-md border bg-card">
       <table className="w-full text-sm">
         <thead className="text-left text-muted-foreground">
@@ -343,7 +387,8 @@ function PlanPrices({ summary }: { summary: Summary }) {
               <td className="hidden px-3 py-2 text-muted-foreground sm:table-cell">{MARKETS[p.market ?? ""] ?? ""}</td>
               <td className="hidden px-3 py-2 capitalize text-muted-foreground sm:table-cell">{p.setting}</td>
               <td className="px-3 py-2 text-right tabular">
-                {p.type === "negotiated_dollar" ? money(p.amount)
+                {isPlaceholder(p) ? <span className="text-muted-foreground">{money(p.amount)} <span className="text-xs">placeholder</span></span>
+                  : p.type === "negotiated_dollar" ? money(p.amount)
                   : p.type === "negotiated_percentage" ? `${p.amount ?? "?"}% of charges`
                   : (
                     <Tooltip>
@@ -359,5 +404,6 @@ function PlanPrices({ summary }: { summary: Summary }) {
         </tbody>
       </table>
     </div>
+    </>
   );
 }
