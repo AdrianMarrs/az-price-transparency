@@ -130,7 +130,7 @@ export default function Hospital({ loaderData: p }: Route.ComponentProps) {
                       </Link>
                     </TableCell>
                     <TableCell className="text-right tabular">{money(s.negotiated_median)}</TableCell>
-                    <TableCell className="text-right tabular">{s.cash != null ? money(s.cash) : <span className="text-xs text-muted-foreground">Not published</span>}</TableCell>
+                    <TableCell className="text-right tabular">{s.cash != null ? money(s.cash) : <span className="text-xs text-muted-foreground">Unpublished</span>}</TableCell>
                     <TableCell className="hidden pr-6 text-right tabular text-muted-foreground sm:table-cell">{s.plans}</TableCell>
                   </TableRow>
                 ))}

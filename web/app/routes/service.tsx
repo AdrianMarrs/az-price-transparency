@@ -198,7 +198,7 @@ function CashOnPhones({ cash }: { cash: Range }) {
 // A hospital's own cash or list price. Many files leave both blank for a procedure.
 function StandardPrice({ range }: { range: Range }) {
   if (range) return <>{moneyRange(range)}</>;
-  return <span className="text-xs text-muted-foreground">Not published</span>;
+  return <span className="text-xs text-muted-foreground">Unpublished</span>;
 }
 
 // Without this, blank Cash and List price columns read as missing data. They're blank in
