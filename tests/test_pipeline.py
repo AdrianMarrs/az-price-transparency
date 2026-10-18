@@ -136,3 +136,30 @@ def test_a_small_file_is_parsed_in_the_worker(tmp_path, monkeypatch):
     result = pipeline.process(pipeline.Job("030006", "AZ", "u", None), tmp_path, keep=False)
     assert not result["big"] and result["entry"]["outcome"] in ("parsed", "partly_parsed")
     assert path.exists()  # no data bucket: the only copy is kept
+
+
+def test_an_error_fails_only_that_hospital(tmp_path, monkeypatch):
+    def broken(*args):
+        raise OSError(12, "Cannot allocate memory")
+
+    monkeypatch.setattr(pipeline.download, "download", broken)
+    result = pipeline.process(pipeline.Job("030006", "AZ", "u", None), tmp_path, keep=False)
+    assert (
+        result["row"]["outcome"] == "failed" and "Cannot allocate memory" in result["row"]["error"]
+    )
+
+
+def test_empty_tables_get_a_file_with_their_columns():
+    made = pipeline.ensure_tables()
+    assert len(made) == 3
+    rates = lake.read("raw/insurer_rates/*/*/*/*.parquet")
+    assert rates.is_empty() and {"negotiated_rate", "insurer", "network", "loaded_at"} <= set(
+        rates.columns
+    )
+    assert pipeline.ensure_tables() == []  # only once
+
+
+def test_a_table_with_files_is_left_alone(tmp_path):
+    write_hospital(pl.read_parquet(parse_fixture(tmp_path)), "030006", "AZ")
+    made = pipeline.ensure_tables()
+    assert not any("hospital_charges" in m for m in made)

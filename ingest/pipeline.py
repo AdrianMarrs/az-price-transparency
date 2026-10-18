@@ -48,7 +48,10 @@ from ingest import lake
 from ingest.hospitals import browser, compliance, download, payer_plans, source_log
 from ingest.hospitals.find_sources import USER_AGENT
 from ingest.hospitals.load import HOSPITALS_PATH, write_hospital
+from ingest.hospitals.load import SCHEMA as CHARGES_SCHEMA
 from ingest.hospitals.parse import PARSED_DIR, load_shoppable, parse_one
+from ingest.insurers.load import KEYS as INSURER_KEYS
+from ingest.insurers.normalize import SCHEMA as INSURER_SCHEMA
 from ingest.storage import upload
 
 SOURCES_PATH = download.SOURCES_PATH
@@ -111,8 +114,18 @@ def parse_and_load(ccn: str, state: str, path: Path, source_id: int, keep: bool)
 
 
 def process(job: Job, day_dir: Path, keep: bool) -> dict:
-    """One hospital, in a worker process: download, then parse and load if it's new."""
+    """One hospital, in a worker process: download, then parse and load if it's new. Never
+    raises: an error (a full disk, a file the parser trips on) fails this hospital only."""
     started = datetime.now(UTC)
+    try:
+        return process_one(job, day_dir, keep, started)
+    except Exception as e:  # noqa: BLE001 - one hospital must not stop the run
+        row = {"ccn": job.ccn, "url": job.url, "outcome": "failed", "id": source_log.new_id(started),
+               "error": f"{type(e).__name__}: {e}"[:300]}  # fmt: skip
+        return {"row": row, "started": started, "entry": None, "state": job.state, "big": False}
+
+
+def process_one(job: Job, day_dir: Path, keep: bool, started: datetime) -> dict:
     headers = {"User-Agent": USER_AGENT}
     with httpx.Client(timeout=httpx.Timeout(60, read=300), follow_redirects=True,
                       headers=headers) as client:  # fmt: skip
@@ -240,8 +253,31 @@ def fetch_blocked(blocked: list[tuple[dict, str]], day_dir: Path, keep: bool) ->
     return rows
 
 
+LOADED_AT = {"loaded_at": pl.Datetime("us", "UTC")}
+# Each raw table's folder (at the depth dbt's views read) and columns, for ensure_tables.
+TABLES = {
+    "raw/hospital_charges/state=_/ccn=_": CHARGES_SCHEMA | LOADED_AT,
+    "raw/insurer_rates/insurer=_/month=_/network=_":
+        {c: t for c, t in INSURER_SCHEMA.items() if c not in INSURER_KEYS} | LOADED_AT,
+    "raw/source_files": source_log.SCHEMA,
+}  # fmt: skip
+
+
+def ensure_tables() -> list[str]:
+    """Give each raw table with no files yet an empty one with its columns, so dbt's views
+    exist and the models build (a new lake has no insurer rates, for one). Returns them."""
+    made = []
+    for folder, schema in TABLES.items():
+        table = "/".join(folder.split("/")[:2])
+        depth = folder.count("/") - 1
+        if not lake.files(f"{table}/{'*/' * depth}*.parquet"):
+            made.append(lake.append(folder, pl.DataFrame(schema=schema), "empty.parquet"))
+    return made
+
+
 def build_warehouse(states: list[str]) -> None:
     """Compliance and payer plans for every hospital, dbt build, then each state's files."""
+    ensure_tables()
     compliance.main()
     payer_plans.main()
     subprocess.run(["dbt", "build", "--project-dir", "warehouse", "--profiles-dir", "warehouse"],

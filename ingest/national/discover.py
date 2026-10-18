@@ -93,15 +93,43 @@ def name_score(hospital: str, location: str) -> float:
     return shared / len(h) - 0.1 * len(loc - h) / len(loc)
 
 
-def best_entry(name: str, entries: list[dict]) -> tuple[dict | None, float]:
-    """The entry for this hospital and its score: the best name match (0.75 or better, and
-    clearly ahead of the next), or the only entry in a one-location file."""
+DIRECTIONS = {"NORTH", "SOUTH", "EAST", "WEST", "CENTRAL", "UPPER", "LOWER"}
+
+
+def best_entry(name: str, entries: list[dict], host: str = "") -> tuple[dict | None, float]:
+    """The entry for this hospital and its score, or (None, best score): the only entry in a
+    one-location file; else the one entry whose distinctive words are exactly the
+    hospital's; else the best name match (0.75 or better, and clearly ahead of the next).
+    Failing that, a full match without the hospital's brand: the part of its name before
+    " - " ("KAISER FOUNDATION HOSPITAL - VACAVILLE" is "Vacaville Medical Center" in
+    Kaiser's own file), or words in the website's host ("Mercy" on mercy.com)."""
     named = [e for e in entries if e.get("location-name")]
     if len(entries) == 1:
         return entries[0], 1.0
+    mine = words(name)
+    exact = [e for e in named if words(e["location-name"]) == mine]
+    if mine and len({e.get("mrf-url") for e in exact}) == 1:
+        return exact[0], 1.0
+    entry, score = scored_match(name, named)
+    if entry is not None:
+        return entry, score
+    host_word = host.upper().replace("-", "")
+    unbranded = [name.rsplit(" - ", 1)[1]] if " - " in name else []
+    unbranded.append(" ".join(sorted(w for w in mine if w not in host_word)))
+    for rest in unbranded:
+        distinctive = words(rest) - DIRECTIONS
+        if words(rest) != mine and any(len(w) >= 4 for w in distinctive):
+            entry, branded = scored_match(rest, named, minimum=1.0)
+            if entry is not None:
+                return entry, branded
+    return None, score
+
+
+def scored_match(name: str, named: list[dict], minimum: float = 0.75
+                 ) -> tuple[dict | None, float]:  # fmt: skip
     scored = sorted(((name_score(name, e["location-name"]), i) for i, e in enumerate(named)),
                     reverse=True)  # fmt: skip
-    if not scored or scored[0][0] < 0.75:
+    if not scored or scored[0][0] < minimum:
         return None, scored[0][0] if scored else 0.0
     if len(scored) > 1 and scored[1][0] >= scored[0][0] - 0.05:
         return None, scored[0][0]  # two equally good: don't guess
@@ -291,7 +319,7 @@ def match_hospital(h: dict, root: str | None, fetched: dict, index: Index) -> di
             return row | {"status": "found_malformed", "mrf_url": f"{root}/cms-hpt.txt"}
         row["status"] = status
         if status in FOUND_STATUS:
-            entry, score = best_entry(h["name"], parse_cms_hpt(text))
+            entry, score = best_entry(h["name"], parse_cms_hpt(text), urlparse(root).netloc)
             if entry is not None and entry.get("mrf-url"):
                 return row | {"status": FOUND_STATUS[status], "match_score": score,
                               "location_name": entry.get("location-name", ""),

@@ -6,7 +6,8 @@
 //   app/data/featured-services.json  CMS's 70-odd "shoppable" services, pre-rendered as pages
 //                                    and listed on the home page by category
 //
-// Hospitals come from warehouse/seeds/hospitals.csv (federal hospitals are out of scope);
+// Hospitals come from warehouse/seeds/hospitals.csv, which covers every state: the site's
+// state's only (STATE), federal hospitals left out as out of scope;
 // services from warehouse/seeds/shoppable_services.csv. Profiles are read from the live site's
 // data files (VITE_DATA_URL; serving/export_static.py writes them), as the browser reads them.
 
@@ -14,7 +15,8 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 
 const SEEDS = new URL("../../warehouse/seeds/", import.meta.url);
 const OUT = new URL("../app/data/", import.meta.url);
-const DATA = `${(process.env.VITE_DATA_URL ?? (await envLocal())).replace(/\/$/, "")}/data/az`;
+const STATE = "AZ"; // as app/lib/api.ts
+const DATA = `${(process.env.VITE_DATA_URL ?? (await envLocal())).replace(/\/$/, "")}/data/${STATE.toLowerCase()}`;
 
 async function envLocal() {
   const text = await readFile(new URL("../.env.local", import.meta.url), "utf8").catch(() => "");
@@ -67,7 +69,7 @@ async function profile(ccn) {
 
 async function main() {
   const seed = parseCsv(await readFile(new URL("hospitals.csv", SEEDS), "utf8"))
-    .filter((h) => h.federally_run !== "true");
+    .filter((h) => h.state === STATE && h.federally_run !== "true");
   const hospitals = [];
   for (let i = 0; i < seed.length; i += 4) { // a few at a time: under the API's throttle
     const batch = await Promise.all(seed.slice(i, i + 4).map(async (h) => {

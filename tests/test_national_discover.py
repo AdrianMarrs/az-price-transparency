@@ -51,3 +51,36 @@ def test_system_match_needs_city_or_three_words():
     index = Index({"https://h.org": ("found", text)})
     assert index.match("HOLY CROSS HOSPITAL", "TAOS") is None
     assert index.match("HOLY CROSS HOSPITAL", "") is None
+
+
+def entries(*names):
+    return [{"location-name": n, "mrf-url": f"https://x/{i}.csv"} for i, n in enumerate(names)]
+
+
+def test_an_exact_name_wins_over_a_longer_one():
+    found, score = best_entry("GOOD SAMARITAN HOSPITAL",
+                              entries("GOOD SAMARITAN HOSPITAL", "GOOD SAMARITAN HOSPITAL-MISSION OAKS"))  # fmt: skip
+    assert found["mrf-url"] == "https://x/0.csv" and score == 1.0
+
+
+def test_a_brand_before_the_dash_or_in_the_host_is_set_aside():
+    kaiser = entries("Vacaville Medical Center", "Vallejo Medical Center")
+    assert (
+        best_entry("KAISER FOUNDATION HOSPITAL - VACAVILLE", kaiser)[0]["mrf-url"]
+        == "https://x/0.csv"
+    )
+    mercy = entries("Defiance Hospital", "Mercy West Hospital")
+    assert (
+        best_entry("MERCY DEFIANCE HOSPITAL", mercy, "www.mercy.com")[0]["mrf-url"]
+        == "https://x/0.csv"
+    )
+    assert best_entry("MERCY DEFIANCE HOSPITAL", mercy)[0] is None  # no brand known
+
+
+def test_without_its_brand_a_hospital_still_needs_every_word():
+    kaiser = entries("San Jose Medical Center", "Vallejo Medical Center")
+    assert best_entry("KAISER FOUNDATION HOSPITAL - SAN JOSE NORTH", kaiser)[0] is None
+    assert (
+        best_entry("KAISER FOUNDATION HOSPITAL - NORTH", entries("North Campus", "South"))[0]
+        is None
+    )

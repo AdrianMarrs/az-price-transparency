@@ -88,6 +88,12 @@ def delete_prefix(rel: str) -> None:
             s3.delete_objects(Bucket=bucket, Delete={"Objects": keys, "Quiet": True})
 
 
+def files(rel_glob: str, con: duckdb.DuckDBPyConnection | None = None) -> list[str]:
+    """The files matching rel_glob (none yet is an empty list)."""
+    con = con or connect()
+    return [r[0] for r in con.execute(f"SELECT file FROM glob('{path(rel_glob)}')").fetchall()]
+
+
 def scan(rel_glob: str) -> str:
     """SQL for every Parquet file matching rel_glob, folder names (state=AZ) as columns.
     Those stay text: autocast would make ccn=030006 the number 30006."""
