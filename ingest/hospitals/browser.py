@@ -21,13 +21,14 @@ off anywhere the browser or a display is missing (CI).
 """
 
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
 
 PROFILE_DIR = Path("data/browser-profile")
-WAIT_MS = 90_000  # for the download to start; a bot check can take a few seconds
+WAIT_MS = 30_000  # for the download to start; a bot check that lets one through takes seconds
 
 
 def channel() -> str | None:
@@ -64,7 +65,9 @@ def fetch_files(jobs: list[tuple[str, str]], dest_dir: Path) -> list[Fetched]:
     dest_dir.mkdir(parents=True, exist_ok=True)
     results = {ccn: Fetched(ccn, url) for ccn, url in jobs}
     with sync_playwright() as p:
-        for mode in ("headless", "headed"):
+        # No display (a container): a window can't open, so only the headless try.
+        no_display = sys.platform.startswith("linux") and not os.environ.get("DISPLAY")
+        for mode in ("headless",) if no_display else ("headless", "headed"):
             todo = [r for r in results.values() if r.path is None]
             if not todo:
                 break
@@ -75,7 +78,8 @@ def fetch_files(jobs: list[tuple[str, str]], dest_dir: Path) -> list[Fetched]:
                 )  # fmt: skip
             except PlaywrightError as e:  # no Edge, or no display for a window
                 for r in todo:
-                    r.error = f"{mode} browser would not start: {e.message.splitlines()[0]}"
+                    why = f"{mode} browser would not start: {e.message.splitlines()[0]}"
+                    r.error = f"{r.error}; {why}" if r.error else why
                 continue
             try:
                 page = context.new_page()
@@ -108,4 +112,5 @@ def fetch_one(page, r: Fetched, dest_dir: Path, mode: str) -> None:
             title = page.title()
         except PlaywrightError:
             pass
-        r.error = f"{mode}: {title or e.message.splitlines()[0]}"
+        why = f"{mode}: {title or e.message.splitlines()[0]}"
+        r.error = f"{r.error}; {why}" if r.error else why  # keep the headless try's reason

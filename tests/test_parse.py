@@ -343,3 +343,24 @@ def test_tmc_bundled_items_are_kept_as_algorithm_prices():
     assert bundled.height > 0
     assert set(bundled["price_type"]) == {"negotiated_algorithm"}
     assert bundled["amount"].null_count() == bundled.height
+
+
+def test_a_windows_1252_file_parses_like_its_utf8_original(tmp_path, monkeypatch):
+    from ingest.hospitals import parse as parse_module
+
+    monkeypatch.setattr(parse_module, "PARSED_DIR", tmp_path / "parsed")
+    text = Path("tests/fixtures/030006.csv").read_text(encoding="utf-8-sig")
+    lines = text.splitlines(keepends=True)
+    lines[4] = lines[4].replace("HC CT", "HC CT cirugía\xa0", 1)
+    assert "cirugía" in lines[4]
+    original = tmp_path / "utf8.csv"
+    original.write_text("".join(lines), encoding="utf-8", newline="")
+    excel = tmp_path / "excel.csv.gz"
+    excel.write_bytes(gzip.compress("".join(lines).encode("cp1252")))
+    assert parse_module.is_utf8(original) and not parse_module.is_utf8(excel)
+    shoppable = parse_module.load_shoppable()
+    _, want, _ = parse_module.parse_file(original, shoppable)
+    _, got, _ = parse_module.parse_file(excel, shoppable)
+    assert got.sort(got.columns, nulls_last=True).equals(want.sort(want.columns, nulls_last=True))
+    assert got.height > 0 and got["description"].str.contains("cirugía").any()
+    assert not list((tmp_path / "parsed" / "tmp").iterdir())  # the copy is removed

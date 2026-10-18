@@ -22,6 +22,7 @@ is the readable specification of the same rules, and tests check that the two ag
 """
 
 import argparse
+import codecs
 import csv
 import gzip
 import io
@@ -114,6 +115,34 @@ def open_text(path: Path) -> io.TextIOBase:
     if path.suffix == ".gz":
         return gzip.open(path, "rt", encoding="utf-8-sig", newline="")
     return path.open(encoding="utf-8-sig", newline="")
+
+
+def is_utf8(path: Path) -> bool:
+    """Whether the whole file decodes as UTF-8 (read in chunks, so any size)."""
+    decoder = codecs.getincrementaldecoder("utf-8")()
+    opener = gzip.open if path.suffix == ".gz" else open
+    try:
+        with opener(path, "rb") as f:
+            while chunk := f.read(1 << 20):
+                decoder.decode(chunk)
+            decoder.decode(b"", final=True)
+    except UnicodeDecodeError:
+        return False
+    return True
+
+
+def utf8_copy(path: Path, work_dir: Path) -> Path:
+    """A UTF-8 copy of a Windows-1252 file (what Excel writes; 10 of 83 files in Utah,
+    Rhode Island and Virginia). Its 5 unassigned bytes become U+FFFD."""
+    work_dir.mkdir(parents=True, exist_ok=True)
+    dest = work_dir / f"{path.name.split('.')[0]}_utf8.csv"
+    opener = gzip.open if path.suffix == ".gz" else open
+    with opener(path, "rb") as f, dest.open("w", encoding="utf-8", newline="") as out:
+        decoder = codecs.getincrementaldecoder("cp1252")(errors="replace")
+        while chunk := f.read(1 << 20):
+            out.write(decoder.decode(chunk))
+        out.write(decoder.decode(b"", final=True))
+    return dest
 
 
 def read_csv_metadata(path: Path) -> dict:
@@ -538,6 +567,12 @@ def parse_file(path: Path, shoppable: pl.DataFrame) -> tuple[dict, pl.DataFrame,
             return parse_file(extracted, shoppable)
         finally:
             extracted.unlink()
+    if fmt == "csv" and not is_utf8(path):
+        converted = utf8_copy(path, PARSED_DIR / "tmp")
+        try:
+            return parse_file(converted, shoppable)
+        finally:
+            converted.unlink()
     if fmt == "json":
         meta, items = read_json(path)
     else:
@@ -616,6 +651,7 @@ def outcome(meta: dict) -> str:
 
 def parse_one(ccn: str, path: Path, shoppable: pl.DataFrame) -> dict:
     """Parse one hospital's newest file and write its outputs; never raises."""
+    PARSED_DIR.mkdir(parents=True, exist_ok=True)
     entry = {"ccn": ccn, "path": path.as_posix(), "format": sniff_format(path)}
     size = original_size(path)
     limit = MAX_JSON_BYTES if entry["format"] == "json" else MAX_CSV_BYTES

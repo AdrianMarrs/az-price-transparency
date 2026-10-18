@@ -180,6 +180,7 @@ def run_hospitals(states: list[str], workers: int, limit: int | None, fresh_days
     todo = hospitals_to_run(states)
     loaded = loaded_hospitals()
     done = recently_done(log.before, fresh_days, datetime.now(UTC), loaded)
+    done &= set(todo["ccn"])
     todo = todo.filter(~pl.col("ccn").is_in(list(done)))
     if limit:
         todo = todo.head(limit)
