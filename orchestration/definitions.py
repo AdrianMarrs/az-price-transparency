@@ -7,7 +7,7 @@ Asset graph (left to right):
     hospital_list -> hospital_sources -> price_file[ccn] -> parsed_prices[ccn]
         -> raw/hospital_charges[ccn] -> dbt models
     parsed_prices -> raw/payer_plans, raw/compliance_checks -> dbt models
-    dbt serving models -> dynamodb_items
+    dbt serving models -> static_data_files
 
 price_file, parsed_prices and raw/hospital_charges have one partition per in-scope
 hospital, so one hospital's bad file fails only its own partition.
@@ -20,7 +20,6 @@ from contextlib import contextmanager
 from datetime import date, timedelta
 from pathlib import Path
 
-import boto3
 import dagster as dg
 import polars as pl
 import psycopg
@@ -37,7 +36,7 @@ from ingest.hospitals.parse import (
     parse_one,
     update_report,
 )
-from serving import export_dynamodb
+from serving import export_static
 
 ROOT = Path(__file__).resolve().parents[1]
 HOSPITALS_SEED = ROOT / "warehouse" / "seeds" / "hospitals.csv"
@@ -226,24 +225,20 @@ def warehouse_models(context: dg.AssetExecutionContext, dbt: DbtCliResource):
 @dg.asset(
     group_name="serving",
     deps=[dg.AssetKey("srv_hospital_service_items"), dg.AssetKey("srv_hospital_profiles")],
-    description="Changed serving items written to DynamoDB (PRICES_TABLE); removed ones deleted",
+    description="The site's data as static JSON files (SITE_BUCKET); changed ones uploaded",
 )
-def dynamodb_items(context: dg.AssetExecutionContext) -> dg.MaterializeResult:
-    table_name = os.environ.get("PRICES_TABLE")
-    if not table_name:
-        raise dg.Failure(
-            "PRICES_TABLE is not set (terraform -chdir=infra/main output prices_table)"
-        )
-    table = boto3.resource("dynamodb").Table(table_name)
+def static_data_files(context: dg.AssetExecutionContext) -> dg.MaterializeResult:
+    bucket = os.environ.get("SITE_BUCKET")
+    if not bucket:
+        raise dg.Failure("SITE_BUCKET is not set (terraform -chdir=infra/main output site_bucket)")
     with psycopg.connect(DATABASE_URL, autocommit=True) as conn:
-        counts = export_dynamodb.export(table, conn)
-        if bucket := os.environ.get("DATA_BUCKET"):  # the service list the API searches
-            counts["services"] = export_dynamodb.export_services(conn, bucket)
-    distribution = os.environ.get("CLOUDFRONT_DISTRIBUTION_ID")
-    if distribution and (counts["put"] or counts["deleted"]):  # new prices: clear the API cache
-        counts["invalidation"] = export_dynamodb.invalidate_cache(distribution)
-    context.log.info(f"put {counts['put']:,}, deleted {counts['deleted']:,}")
-    return dg.MaterializeResult(metadata=counts | {"table": table_name})
+        counts = export_static.sync(export_static.build(conn), bucket)
+    distribution = os.environ.get("SITE_DISTRIBUTION_ID")
+    if distribution and (counts["put"] or counts["deleted"]):  # new prices: clear the cache
+        counts["invalidation"] = export_static.invalidate(distribution)
+    context.log.info(f"{counts['files']:,} files; uploaded {counts['put']:,}, "
+                     f"deleted {counts['deleted']:,}")  # fmt: skip
+    return dg.MaterializeResult(metadata=counts | {"bucket": bucket})
 
 
 # ---------- jobs, schedules, alerts ----------
@@ -262,7 +257,7 @@ warehouse_job = dg.define_asset_job(
 )
 # Separate from build_warehouse so the warehouse builds without AWS (locally, in CI).
 export_job = dg.define_asset_job(
-    "export_serving", selection=dg.AssetSelection.assets(dynamodb_items)
+    "export_serving", selection=dg.AssetSelection.assets(static_data_files)
 )
 
 
@@ -288,7 +283,7 @@ def weekly_warehouse_build():
 
 @dg.schedule(job=export_job, cron_schedule="0 13 * * 1", execution_timezone="America/Phoenix")
 def weekly_serving_export():
-    """Mondays 13:00: write what changed to DynamoDB (the build takes about an hour)."""
+    """Mondays 13:00: upload the data files that changed (the build takes about an hour)."""
     return dg.RunRequest()
 
 
@@ -309,7 +304,7 @@ def alert_on_failure(context: dg.RunFailureSensorContext):
 
 defs = dg.Definitions(
     assets=[hospital_list_seed, hospital_sources, price_file, parsed_prices, warehouse_prices,
-            payer_plan_names, compliance_checks, warehouse_models, dynamodb_items],
+            payer_plan_names, compliance_checks, warehouse_models, static_data_files],
     asset_checks=[parsed_row_count_stable, parsed_file_is_current],
     jobs=[discovery_job, hospital_job, warehouse_job, export_job],
     schedules=[weekly_discovery, weekly_hospital_refresh, weekly_warehouse_build,

@@ -2,6 +2,7 @@
 // deployed: a path's own file, else its folder's index.html (pre-rendered pages), else the app
 // shell __spa-fallback.html; with the site's security headers, including its Content Security
 // Policy (infra/main/site.tf), so a script or style the policy would block fails here too.
+// /data/ (the data files, serving/export_static.py) is passed through to the live site.
 //
 //   node scripts/serve-build.mjs [port]
 
@@ -13,11 +14,11 @@ import { extname, join, normalize } from "node:path";
 const ROOT = new URL("../build/client/", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
 const PORT = Number(process.argv[2] ?? 4173);
 const env = await readFile(new URL("../.env.local", import.meta.url), "utf8").catch(() => "");
-const API = process.env.VITE_API_URL ?? env.match(/^VITE_API_URL=(.+)$/m)?.[1]?.trim() ?? "";
+const DATA = (process.env.VITE_DATA_URL ?? env.match(/^VITE_DATA_URL=(.+)$/m)?.[1]?.trim() ?? "https://clearhealthcareprices.com").replace(/\/$/, "");
 
 const HEADERS = {
   "Content-Security-Policy": [
-    "default-src 'self'", `connect-src 'self' ${API}`, "img-src 'self' data:",
+    "default-src 'self'", "connect-src 'self'", "img-src 'self' data:",
     "style-src 'self'", "script-src 'self'", "frame-ancestors 'none'",
   ].join("; "),
   "X-Content-Type-Options": "nosniff",
@@ -42,6 +43,13 @@ export async function resolve(urlPath) {
 }
 
 createServer(async (req, res) => {
+  if (req.url?.startsWith("/data/")) {
+    const upstream = await fetch(DATA + req.url); // fetch decompresses; send it plain
+    const type = upstream.headers.get("content-type") ?? "application/octet-stream";
+    res.writeHead(upstream.status, { ...HEADERS, "Content-Type": type });
+    res.end(Buffer.from(await upstream.arrayBuffer()));
+    return;
+  }
   const file = await resolve(req.url ?? "/");
   if (!file) {
     res.writeHead(404, HEADERS).end("Not found");
@@ -49,4 +57,4 @@ createServer(async (req, res) => {
   }
   res.writeHead(200, { ...HEADERS, "Content-Type": TYPES[extname(file)] ?? "application/octet-stream" });
   createReadStream(file).pipe(res);
-}).listen(PORT, () => console.log(`build/client on http://localhost:${PORT} (API ${API})`));
+}).listen(PORT, () => console.log(`build/client on http://localhost:${PORT} (data from ${DATA})`));

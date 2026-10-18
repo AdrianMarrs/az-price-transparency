@@ -54,7 +54,7 @@ def test_weekly_schedule_requests_one_run_per_hospital():
 
 
 def test_dynamodb_export_follows_the_serving_models():
-    assert parents(dg.AssetKey("dynamodb_items")) == {
+    assert parents(dg.AssetKey("static_data_files")) == {
         dg.AssetKey("srv_hospital_service_items"),
         dg.AssetKey("srv_hospital_profiles"),
     }

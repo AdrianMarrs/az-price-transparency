@@ -7,7 +7,8 @@ Bucket and distribution come from SITE_BUCKET and SITE_DISTRIBUTION_ID, or else 
 `terraform -chdir=infra/main output`. Files under assets/ have a content hash in their name,
 so they are cached for a year. Pages (.html) and their data (.data) keep their names from
 build to build, so browsers revalidate them every time and the deploy clears them from
-CloudFront. Files no longer in the build are deleted.
+CloudFront. Files no longer in the build are deleted, except the data files under data/,
+which serving/export_static.py writes and owns.
 """
 
 import json
@@ -21,6 +22,7 @@ import boto3
 
 DIST = Path("web/build/client")
 IMMUTABLE = "public, max-age=31536000, immutable"
+DATA_PREFIX = "data/"  # serving/export_static.py's files: never the deploy's to delete
 
 
 def terraform_outputs() -> dict:
@@ -41,6 +43,12 @@ def content_type(key: str) -> str:
     return mimetypes.guess_type(key)[0] or "application/octet-stream"
 
 
+def stale_keys(existing: list[str], uploaded: list[str]) -> list[str]:
+    """Bucket keys the build no longer has, leaving the data files alone."""
+    keep = set(uploaded)
+    return [k for k in existing if k not in keep and not k.startswith(DATA_PREFIX)]
+
+
 def main() -> None:
     if not (DIST / "index.html").exists():
         raise SystemExit(f"no {DIST.as_posix()}/index.html: run `npm run build` in web/ first")
@@ -59,8 +67,9 @@ def main() -> None:
         s3.upload_file(str(path), bucket, key, ExtraArgs={
             "ContentType": content_type(key), "CacheControl": cache_control(key)})  # fmt: skip
         keys.append(key)
-    stale = [o["Key"] for page in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket)
-             for o in page.get("Contents", []) if o["Key"] not in keys]  # fmt: skip
+    existing = [o["Key"] for page in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket)
+                for o in page.get("Contents", [])]  # fmt: skip
+    stale = stale_keys(existing, keys)
     for i in range(0, len(stale), 1000):
         s3.delete_objects(
             Bucket=bucket, Delete={"Objects": [{"Key": k} for k in stale[i : i + 1000]]}

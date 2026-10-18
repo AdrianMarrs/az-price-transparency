@@ -1,4 +1,4 @@
-// One search box for the whole site: services (from the API), hospitals and cities (from the
+// One search box for the whole site: services (from the service list), hospitals and cities (from the
 // built-in list). A combobox in the WAI-ARIA sense: arrow keys move through the results,
 // Enter opens one (or the full results page), Escape closes the list.
 
@@ -44,15 +44,15 @@ export function SearchBox({ size = "lg", autoFocus = false, initial = "" }: {
   const query = q.trim();
   useEffect(() => {
     if (query.length < 2) { setServices([]); return; }
-    const controller = new AbortController();
+    let current = true; // a later keystroke's results win
     setLoading(true);
     const timer = setTimeout(() => {
-      searchServices(query, controller.signal)
-        .then((r) => setServices(r.slice(0, 6)))
+      searchServices(query)
+        .then((r) => { if (current) setServices(r.slice(0, 6)); })
         .catch(() => {})
-        .finally(() => setLoading(false));
-    }, 200);
-    return () => { clearTimeout(timer); controller.abort(); };
+        .finally(() => { if (current) setLoading(false); });
+    }, 150);
+    return () => { current = false; clearTimeout(timer); };
   }, [query]);
 
   const results = useMemo<Result[]>(() => [

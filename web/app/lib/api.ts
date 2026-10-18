@@ -1,7 +1,10 @@
-// Client for the price API (api/handler.py), through CloudFront. Used in the browser and,
-// for pre-rendered pages, at build time.
+// Reads the site's data: static JSON files that serving/export_static.py writes next to the
+// site, under /data/<state>/. Used in the browser (same origin, so a relative URL) and, for
+// pre-rendered pages, at build time in Node, which needs the site's address (VITE_DATA_URL).
+// In development Vite proxies /data to the live site (vite.config.ts).
 
-const BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+const STATE = "az";
+const BASE = typeof window === "undefined" ? (import.meta.env.VITE_DATA_URL ?? "").replace(/\/$/, "") : "";
 
 export type Service = {
   id: string;
@@ -75,8 +78,8 @@ export type ShoppableSummary = {
   plans: number;
 };
 
-// The API is throttled (10 requests a second, bursts of 20) and a build pre-renders 170
-// pages from it, so busy answers are retried after a growing pause. GETs are safe to repeat.
+// A build pre-renders 170 pages from these files; a busy answer from CloudFront is retried
+// after a growing pause. GETs are safe to repeat.
 const BUSY = new Set([429, 502, 503, 504]);
 export const RETRY_DELAYS_MS = [500, 1000, 2000, 4000, 8000];
 
@@ -88,23 +91,50 @@ export async function fetchWithRetry(url: string, signal?: AbortSignal, delays =
   }
 }
 
+export class NotFound extends Error {}
+
 async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetchWithRetry(`${BASE}${path}`, signal);
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body.error ?? `HTTP ${response.status}`);
+  const response = await fetchWithRetry(`${BASE}/data/${STATE}${path}`, signal);
+  // A missing file comes back as the app shell (CloudFront's fallback for unknown paths),
+  // with a 200, so the type tells a data file from a missing one.
+  if (response.status === 404 || response.status === 403 || !response.headers.get("content-type")?.includes("json")) {
+    throw new NotFound(path);
   }
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json() as Promise<T>;
 }
 
-export const searchServices = (q: string, signal?: AbortSignal) =>
-  get<{ services: Service[] }>(`/services?q=${encodeURIComponent(q)}`, signal).then(
-    (r) => r.services,
-  );
+// Search runs in the browser over the whole service list (about 13,000 services, 350 KB
+// compressed), fetched once on the first search.
+export type SearchService = Service & { terms?: string };
+let serviceList: Promise<SearchService[]> | null = null;
 
-// Filters are applied in the browser so one cached response serves every filter choice.
-export const comparePrices = (serviceId: string, signal?: AbortSignal) =>
-  get<Compare>(`/services/${serviceId}/prices`, signal); // ids are [a-z0-9:-], safe in a path
+export function searchServices(q: string): Promise<Service[]> {
+  serviceList ??= get<SearchService[]>("/search.json").catch((e) => {
+    serviceList = null; // try again next time
+    throw e;
+  });
+  return serviceList.then((list) => findServices(list, q));
+}
+
+// The same rules the API's search used: every word must appear in the code, description or
+// plain-English terms; CMS shoppable services first, then the most widely priced.
+export function findServices(list: SearchService[], q: string, limit = 25): Service[] {
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const text = (s: SearchService) =>
+    `${s.code} ${s.description} ${s.cms_description ?? ""} ${s.terms ?? ""}`.toLowerCase();
+  return list
+    .filter((s) => { const t = text(s); return words.every((w) => t.includes(w)); })
+    .sort((a, b) =>
+      Number(a.cms_shoppable_id == null) - Number(b.cms_shoppable_id == null)
+      || b.hospitals - a.hospitals || a.id.localeCompare(b.id))
+    .slice(0, limit);
+}
+
+// Filters are applied in the browser, so one file serves every filter choice.
+export const comparePrices = (slug: string, signal?: AbortSignal) =>
+  get<Compare>(`/services/${slug}.json`, signal);
 
 export const hospitalProfile = (ccn: string, signal?: AbortSignal) =>
-  get<Profile>(`/providers/${ccn}`, signal);
+  get<Profile>(`/providers/${ccn}.json`, signal);

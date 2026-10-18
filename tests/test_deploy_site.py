@@ -25,3 +25,13 @@ def test_pages_and_their_data_revalidate():
     assert deploy_site.cache_control("hospitals/030006.data") == "no-cache"
     assert "immutable" in deploy_site.cache_control("assets/inline/0123456789abcdef.js")
     assert deploy_site.content_type("hospitals/030006.data") == "text/x-script"
+
+
+def test_data_files_are_never_deleted_by_a_deploy():
+    existing = [
+        "index.html",
+        "assets/old-1a2b.js",
+        "data/az/search.json",
+        "data/az/services/x.json",
+    ]
+    assert deploy_site.stale_keys(existing, ["index.html"]) == ["assets/old-1a2b.js"]

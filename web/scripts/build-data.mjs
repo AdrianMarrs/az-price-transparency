@@ -1,25 +1,25 @@
 // Writes the small data files the site is built from (run before `vite build` and dev):
 //
 //   app/data/hospitals.json          every in-scope Arizona hospital, with its profile from the
-//                                    API (score, type, address): the hospital list, the search
+//                                    data files (score, type): the hospital list, the search
 //                                    box's hospital and city results, and one pre-rendered page each
 //   app/data/featured-services.json  CMS's 70-odd "shoppable" services, pre-rendered as pages
 //                                    and listed on the home page by category
 //
 // Hospitals come from warehouse/seeds/hospitals.csv (federal hospitals are out of scope);
-// services from warehouse/seeds/shoppable_services.csv. Profiles are read from the live API
-// (VITE_API_URL), the same cached responses the browser gets.
+// services from warehouse/seeds/shoppable_services.csv. Profiles are read from the live site's
+// data files (VITE_DATA_URL; serving/export_static.py writes them), as the browser reads them.
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 
 const SEEDS = new URL("../../warehouse/seeds/", import.meta.url);
 const OUT = new URL("../app/data/", import.meta.url);
-const API = (process.env.VITE_API_URL ?? (await envLocal())).replace(/\/$/, "");
+const DATA = `${(process.env.VITE_DATA_URL ?? (await envLocal())).replace(/\/$/, "")}/data/az`;
 
 async function envLocal() {
   const text = await readFile(new URL("../.env.local", import.meta.url), "utf8").catch(() => "");
-  const url = text.match(/^VITE_API_URL=(.+)$/m)?.[1]?.trim();
-  if (!url) throw new Error("Set VITE_API_URL (or put it in web/.env.local)");
+  const url = text.match(/^VITE_DATA_URL=(.+)$/m)?.[1]?.trim();
+  if (!url) throw new Error("Set VITE_DATA_URL (or put it in web/.env.local)");
   return url;
 }
 
@@ -49,16 +49,17 @@ export function parseCsv(text) {
 export const serviceSlug = (codeType, code) =>
   `${codeType === "MS-DRG" ? "drg" : "cpt"}-${code.toLowerCase()}`;
 
-// The API is throttled (10 requests a second); a busy answer is retried after a growing pause.
+// A busy answer from CloudFront is retried after a growing pause.
 const BUSY = new Set([429, 502, 503, 504]);
 
 async function profile(ccn) {
   for (let attempt = 1; ; attempt++) {
-    const response = await fetch(`${API}/providers/${ccn}`);
-    if (response.ok) return response.json();
-    if (response.status === 404) return null;
+    const response = await fetch(`${DATA}/providers/${ccn}.json`);
+    // a missing file is the app shell (HTML), not a 404: see app/lib/api.ts
+    if (response.ok) return response.headers.get("content-type")?.includes("json") ? response.json() : null;
+    if (response.status === 404 || response.status === 403) return null;
     if (!BUSY.has(response.status) || attempt === 6) {
-      throw new Error(`/providers/${ccn}: HTTP ${response.status}`);
+      throw new Error(`/providers/${ccn}.json: HTTP ${response.status}`);
     }
     await new Promise((r) => setTimeout(r, 500 * 2 ** attempt));
   }

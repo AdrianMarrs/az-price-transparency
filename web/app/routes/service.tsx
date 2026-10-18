@@ -11,7 +11,7 @@ import { NativeSelect } from "~/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { comparePrices, type Compare, type Service } from "~/lib/api";
-import { serviceApiId } from "~/lib/catalog";
+import { serviceApiId, serviceSlug } from "~/lib/catalog";
 import {
   compareRows, DEFAULT_SORT, isPlaceholder, MARKETS, money, moneyRange, sortRows, summarize, titleCase,
   type Filters, type Range, type Setting, type Sort, type SortKey, type Summary,
@@ -32,7 +32,7 @@ async function fetchCompare(slug: string): Promise<Compare> {
   const id = serviceApiId(slug);
   if (!id) throw data("Not found", { status: 404 });
   try {
-    return await comparePrices(id);
+    return await comparePrices(serviceSlug(id)); // normalized: "CPT-73721" -> "cpt-73721"
   } catch {
     throw data("Not found", { status: 404 });
   }

@@ -33,7 +33,7 @@ uv run pytest
 uv run dbt build --project-dir warehouse --profiles-dir warehouse
 $env:DAGSTER_HOME = "$PWD\.dagster_home"               # PowerShell
 uv run dagster dev -m orchestration.definitions        # pipeline UI at localhost:3000
-docker compose up web                                  # the site at localhost:5173, live reload (set VITE_API_URL in web/.env.local, see web/.env.example)
+docker compose up web                                  # the site at localhost:5173, live reload (data from the live site; see web/.env.example)
 cd web; npm ci; npm run dev                            # the same without Docker
 ```
 
