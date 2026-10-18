@@ -27,8 +27,7 @@ export function SiteHeader() {
       <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4 sm:px-6">
         <Link to="/" className="flex shrink-0 items-center gap-2.5 font-semibold tracking-tight">
           <Logo className="size-8" />
-          <span className="hidden sm:inline">Arizona Hospital Prices</span>
-          <span className="sm:hidden">AZ Prices</span>
+          <span className="text-sm leading-tight sm:text-base">Clear Healthcare Prices</span>
         </Link>
         <nav aria-label="Main" className="ml-2 hidden items-center gap-1 md:flex">
           {NAV.map((n) => (

@@ -64,12 +64,12 @@ const serviceName = (s: Service) => s.cms_description ?? titleCase(s.description
 const codeLabel = (s: Service) => `${s.code_type === "MS-DRG" ? "MS-DRG" : "CPT/HCPCS"} ${s.code}`;
 
 export const meta: Route.MetaFunction = ({ loaderData }) => {
-  if (!loaderData) return [{ title: "Service not found | Arizona Hospital Prices" }];
+  if (!loaderData) return [{ title: "Service not found | Clear Healthcare Prices" }];
   const s = loaderData.service;
   const priced = loaderData.compact.filter((r) => r.insurerMedian != null);
   const low = priced.length ? Math.min(...priced.map((r) => r.insurerMedian!)) : null;
   return [
-    { title: `${serviceName(s)} (${codeLabel(s)}) prices at Arizona hospitals | Arizona Hospital Prices` },
+    { title: `${serviceName(s)} (${codeLabel(s)}) prices at Arizona hospitals | Clear Healthcare Prices` },
     {
       name: "description",
       content: `Compare ${serviceName(s).toLowerCase()} prices at ${s.hospitals} Arizona hospitals` +

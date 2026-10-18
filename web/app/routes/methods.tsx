@@ -6,7 +6,7 @@ import { hospitals } from "~/lib/catalog";
 import { RULES } from "~/lib/rules";
 
 export const meta: Route.MetaFunction = () => [
-  { title: "How it works, and its limits | Arizona Hospital Prices" },
+  { title: "How it works, and its limits | Clear Healthcare Prices" },
   { name: "description", content: "Where the prices come from, how often they're refreshed, how hospitals are scored, and what published prices can't tell you." },
 ];
 

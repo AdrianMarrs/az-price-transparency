@@ -10,7 +10,7 @@ import { cities, hospitals, matches } from "~/lib/catalog";
 import { titleCase } from "~/lib/summary";
 
 export const meta: Route.MetaFunction = () => [
-  { title: "Arizona hospitals and their price transparency scores | Arizona Hospital Prices" },
+  { title: "Arizona hospitals and their price transparency scores | Clear Healthcare Prices" },
   { name: "description", content: `All ${hospitals.length} non-federal Arizona hospitals: where each is, what kind of hospital it is, and how well it follows the federal price transparency rules.` },
 ];
 

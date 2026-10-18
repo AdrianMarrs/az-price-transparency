@@ -10,7 +10,7 @@ import { searchCities, searchHospitals } from "~/lib/catalog";
 import { titleCase } from "~/lib/summary";
 
 export const meta: Route.MetaFunction = () => [
-  { title: "Search | Arizona Hospital Prices" },
+  { title: "Search | Clear Healthcare Prices" },
   { name: "robots", content: "noindex" },
 ];
 

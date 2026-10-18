@@ -9,7 +9,7 @@ import { categories, featuredServices, hospitals } from "~/lib/catalog";
 import { titleCase } from "~/lib/summary";
 
 export const meta: Route.MetaFunction = () => [
-  { title: "Arizona Hospital Prices: compare what hospitals charge" },
+  { title: "Clear Healthcare Prices: compare what Arizona hospitals charge" },
   {
     name: "description",
     content:

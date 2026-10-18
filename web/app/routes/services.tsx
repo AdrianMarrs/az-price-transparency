@@ -6,7 +6,7 @@ import { Card, CardContent } from "~/components/ui/card";
 import { categories, featuredServices } from "~/lib/catalog";
 
 export const meta: Route.MetaFunction = () => [
-  { title: "Services: compare prices for common procedures | Arizona Hospital Prices" },
+  { title: "Services: compare prices for common procedures | Clear Healthcare Prices" },
   { name: "description", content: "CMS's shoppable services by category, from office visits and lab tests to imaging, surgery and childbirth, with prices at every Arizona hospital." },
 ];
 

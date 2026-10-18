@@ -26,10 +26,10 @@ export const clientLoader = ({ params }: Route.ClientLoaderArgs) => load(params.
 clientLoader.hydrate = true as const;
 
 export const meta: Route.MetaFunction = ({ loaderData }) => {
-  if (!loaderData) return [{ title: "Hospital not found | Arizona Hospital Prices" }];
+  if (!loaderData) return [{ title: "Hospital not found | Clear Healthcare Prices" }];
   const name = titleCase(loaderData.name);
   return [
-    { title: `${name} prices and price transparency | Arizona Hospital Prices` },
+    { title: `${name} prices and price transparency | Clear Healthcare Prices` },
     { name: "description", content: `Published prices at ${name} in ${titleCase(loaderData.city)}, AZ: cash, list and insurer prices for common services, and how well it follows the price transparency rules.` },
   ];
 };
