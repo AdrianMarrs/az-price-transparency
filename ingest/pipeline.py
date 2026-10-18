@@ -38,6 +38,7 @@ import signal
 import subprocess
 import sys
 import time
+from collections import deque
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass
@@ -146,6 +147,21 @@ def process_one(job: Job, day_dir: Path, keep: bool, started: datetime) -> dict:
     return {"row": row, "started": started, "entry": entry, "state": job.state, "big": big}
 
 
+def run_alone(job: Job, day_dir: Path, keep: bool) -> dict:
+    """process() in a fresh process of its own, for a hospital that was in flight when a
+    worker was killed; if it's killed again, a failed row says so."""
+    with ProcessPoolExecutor(1, mp_context=get_context("spawn")) as pool:
+        try:
+            return pool.submit(process, job, day_dir, keep).result()
+        except BrokenProcessPool:
+            started = datetime.now(UTC)
+            row = {"ccn": job.ccn, "url": job.url, "outcome": "failed",
+                   "id": source_log.new_id(started),
+                   "error": "the worker was killed (most likely out of memory)"}  # fmt: skip
+            return {"row": row, "started": started, "entry": None, "state": job.state,
+                    "big": False}  # fmt: skip
+
+
 def run_big(big: list[tuple[dict, str]], keep: bool) -> list[dict]:
     """Parse and load the big files one at a time, each in a fresh process; returns the
     parse entries (a file that ran out of memory gets a failed one)."""
@@ -196,31 +212,52 @@ def run_hospitals(states: list[str], workers: int, limit: int | None, fresh_days
                 log.last(r["ccn"], r["mrf_url"]) if r["ccn"] in loaded else None)
             for r in todo.iter_rows(named=True)]  # fmt: skip
     rows, entries, blocked, big = [], [], [], []
-    pool = ProcessPoolExecutor(workers, mp_context=get_context("spawn"))
     started = time.time()
+
+    def finish(r: dict) -> None:
+        row = r["row"]
+        log.record(row, r["started"])
+        rows.append(row)
+        if r["entry"]:
+            entries.append(r["entry"])
+        if row["outcome"] == "failed" and row.get("http_status") == 403:
+            blocked.append((row, r["state"]))
+        if r["big"]:
+            big.append((row, r["state"]))
+        n = len(rows)
+        size = f"{row['size_bytes'] / 1e6:,.0f} MB" if row.get("size_bytes") else ""
+        parsed = "big: later" if r["big"] else (r["entry"] or {}).get("outcome", "")
+        print(f"[{n}/{len(jobs)} {time.time() - started:,.0f}s] {row['ccn']}  "
+              f"{row['outcome']:10} {size:>8}  {parsed:17} {row.get('error') or ''}")  # fmt: skip
+        if n % SAVE_EVERY == 0:
+            log.save()
+            save_reports(entries)
+
+    queue, suspects = deque(jobs), []
+    pool = ProcessPoolExecutor(workers, mp_context=get_context("spawn"))
     try:
-        pending = {pool.submit(process, j, day_dir, keep) for j in jobs}
-        while pending:
-            finished, pending = wait(pending, return_when=FIRST_COMPLETED)
-            for f in finished:
-                r = f.result()
-                row = r["row"]
-                log.record(row, r["started"])
-                rows.append(row)
-                if r["entry"]:
-                    entries.append(r["entry"])
-                if row["outcome"] == "failed" and row.get("http_status") == 403:
-                    blocked.append((row, r["state"]))
-                if r["big"]:
-                    big.append((row, r["state"]))
-                n = len(rows)
-                size = f"{row['size_bytes'] / 1e6:,.0f} MB" if row.get("size_bytes") else ""
-                parsed = "big: later" if r["big"] else (r["entry"] or {}).get("outcome", "")
-                print(f"[{n}/{len(jobs)} {time.time() - started:,.0f}s] {row['ccn']}  "
-                      f"{row['outcome']:10} {size:>8}  {parsed:17} {row.get('error') or ''}")  # fmt: skip
-                if n % SAVE_EVERY == 0:
-                    log.save()
-                    save_reports(entries)
+        in_flight: dict = {}
+        while queue or in_flight:
+            # No more in flight than workers: if one is killed (out of memory), only these
+            # can be why, and they're rerun one at a time at the end (run_alone).
+            while queue and len(in_flight) < workers:
+                job = queue.popleft()
+                in_flight[pool.submit(process, job, day_dir, keep)] = job
+            finished, _ = wait(in_flight, return_when=FIRST_COMPLETED)
+            try:
+                for f in finished:
+                    r = f.result()
+                    del in_flight[f]
+                    finish(r)
+            except BrokenProcessPool:
+                print(f"a worker was killed; {len(in_flight)} hospitals to rerun alone: "
+                      f"{', '.join(j.ccn for j in in_flight.values())}")  # fmt: skip
+                suspects += in_flight.values()
+                in_flight = {}
+                pool.shutdown(wait=False, cancel_futures=True)
+                pool = ProcessPoolExecutor(workers, mp_context=get_context("spawn"))
+        for job in suspects:
+            finish(run_alone(job, day_dir, keep))
     finally:
         log.save()
         save_reports(entries)
