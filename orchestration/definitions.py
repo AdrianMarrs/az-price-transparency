@@ -243,6 +243,10 @@ def static_data_files(context: dg.AssetExecutionContext) -> dg.MaterializeResult
 
 # ---------- jobs, schedules, alerts ----------
 
+# Every schedule ships stopped: after the initial pass the data is kept as it is, and turning
+# a refresh on is a decision, made in the Dagster UI (October 2026).
+OFF = dg.DefaultScheduleStatus.STOPPED
+
 discovery_job = dg.define_asset_job(
     "discovery", selection=dg.AssetSelection.assets(hospital_list_seed, hospital_sources)
 )
@@ -261,13 +265,23 @@ export_job = dg.define_asset_job(
 )
 
 
-@dg.schedule(job=discovery_job, cron_schedule="0 6 * * 1", execution_timezone="America/Phoenix")
+@dg.schedule(
+    job=discovery_job,
+    cron_schedule="0 6 * * 1",
+    execution_timezone="America/Phoenix",
+    default_status=OFF,
+)
 def weekly_discovery():
     """Mondays 6:00: refresh the hospital list and find each price file."""
     return dg.RunRequest()
 
 
-@dg.schedule(job=hospital_job, cron_schedule="0 7 * * 1", execution_timezone="America/Phoenix")
+@dg.schedule(
+    job=hospital_job,
+    cron_schedule="0 7 * * 1",
+    execution_timezone="America/Phoenix",
+    default_status=OFF,
+)
 def weekly_hospital_refresh(context: dg.ScheduleEvaluationContext):
     """Mondays 7:00: one run per hospital, so a bad file fails only its own run."""
     for ccn in hospital_partitions.get_partition_keys():
@@ -275,13 +289,23 @@ def weekly_hospital_refresh(context: dg.ScheduleEvaluationContext):
                             partition_key=ccn)  # fmt: skip
 
 
-@dg.schedule(job=warehouse_job, cron_schedule="0 11 * * 1", execution_timezone="America/Phoenix")
+@dg.schedule(
+    job=warehouse_job,
+    cron_schedule="0 11 * * 1",
+    execution_timezone="America/Phoenix",
+    default_status=OFF,
+)
 def weekly_warehouse_build():
     """Mondays 11:00: payer names, compliance checks, then dbt build."""
     return dg.RunRequest()
 
 
-@dg.schedule(job=export_job, cron_schedule="0 13 * * 1", execution_timezone="America/Phoenix")
+@dg.schedule(
+    job=export_job,
+    cron_schedule="0 13 * * 1",
+    execution_timezone="America/Phoenix",
+    default_status=OFF,
+)
 def weekly_serving_export():
     """Mondays 13:00: upload the data files that changed (the build takes about an hour)."""
     return dg.RunRequest()

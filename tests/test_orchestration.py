@@ -58,3 +58,12 @@ def test_dynamodb_export_follows_the_serving_models():
         dg.AssetKey("srv_hospital_service_items"),
         dg.AssetKey("srv_hospital_profiles"),
     }
+
+
+def test_every_schedule_ships_stopped():
+    # The data stays as the initial pass left it until a refresh is turned on by hand.
+    from orchestration.definitions import defs
+
+    schedules = list(defs.schedules)
+    assert schedules
+    assert all(s.default_status == dg.DefaultScheduleStatus.STOPPED for s in schedules)
