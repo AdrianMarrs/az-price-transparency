@@ -1,4 +1,4 @@
-import { ChevronDown, Info } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, Info } from "lucide-react";
 import { Fragment, useState } from "react";
 import { data, Link, useSearchParams } from "react-router";
 
@@ -13,8 +13,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip
 import { comparePrices, type Compare, type Service } from "~/lib/api";
 import { serviceApiId } from "~/lib/catalog";
 import {
-  compareRows, isPlaceholder, MARKETS, money, moneyRange, summarize, titleCase,
-  type Filters, type Range, type Setting, type Summary,
+  compareRows, DEFAULT_SORT, isPlaceholder, MARKETS, money, moneyRange, sortRows, summarize, titleCase,
+  type Filters, type Range, type Setting, type Sort, type SortKey, type Summary,
 } from "~/lib/summary";
 import { cn } from "~/lib/utils";
 
@@ -174,18 +174,59 @@ function StaticTable({ rows }: { rows: CompactRow[] }) {
   );
 }
 
-function PriceTableHead() {
+const SORT_LABELS: Record<SortKey, [string, string, string]> = {
+  // column, then how the row count describes each direction
+  median: ["Insurer median", "lowest insurer median first", "highest insurer median first"],
+  range: ["Insurer range", "lowest insurer price first", "highest low-end insurer price first"],
+  cash: ["Cash", "lowest cash price first", "highest cash price first"],
+  gross: ["List price", "lowest list price first", "highest list price first"],
+  score: ["Transparency", "least transparent first", "most transparent first"],
+};
+
+function sortDescription(sort: Sort): string {
+  return SORT_LABELS[sort.key][sort.dir === "asc" ? 1 : 2];
+}
+
+// The static (pre-rendered) table has no sort; the interactive one passes sort and onSort.
+function PriceTableHead({ sort, onSort }: { sort?: Sort; onSort?: (key: SortKey) => void }) {
+  const head = (key: SortKey, className: string) => (
+    <SortableHead key={key} column={key} className={className} sort={sort} onSort={onSort} />
+  );
   return (
     <TableHeader>
       <TableRow>
         <TableHead className="pl-5">Hospital</TableHead>
-        <TableHead className="text-right">Insurer median</TableHead>
-        <TableHead className="hidden text-right md:table-cell">Insurer range</TableHead>
-        <TableHead className="hidden text-right sm:table-cell">Cash</TableHead>
-        <TableHead className="hidden text-right lg:table-cell">List price</TableHead>
-        <TableHead className="hidden pr-5 sm:table-cell">Transparency</TableHead>
+        {head("median", "text-right")}
+        {head("range", "hidden text-right md:table-cell")}
+        {head("cash", "hidden text-right sm:table-cell")}
+        {head("gross", "hidden text-right lg:table-cell")}
+        {head("score", "hidden pr-5 sm:table-cell")}
       </TableRow>
     </TableHeader>
+  );
+}
+
+function SortableHead({ column, className, sort, onSort }: {
+  column: SortKey; className: string; sort?: Sort; onSort?: (key: SortKey) => void;
+}) {
+  const label = SORT_LABELS[column][0];
+  if (!sort || !onSort) return <TableHead className={className}>{label}</TableHead>;
+  const active = sort.key === column;
+  const Icon = !active ? ArrowUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <TableHead
+      className={className}
+      aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        className="inline-flex items-center gap-1 rounded hover:text-primary focus-visible:outline-2 focus-visible:outline-ring"
+      >
+        {label}
+        <Icon aria-hidden className={cn("size-3.5", active ? "text-primary" : "text-muted-foreground/60")} />
+      </button>
+    </TableHead>
   );
 }
 
@@ -237,10 +278,18 @@ function Interactive({ data: d, filters, set }: {
 }) {
   const counties = [...new Set(d.hospitals.map((h) => h.hospital.county ?? ""))].filter(Boolean).sort();
   const markets = [...new Set(d.hospitals.flatMap((h) => h.prices.map((p) => p.market ?? "")))].filter((m) => m in MARKETS);
-  const rows = d.hospitals
-    .filter((h) => !filters.county || h.hospital.county === filters.county)
-    .map((row) => ({ row, summary: summarize(row, filters) }))
-    .sort(compareRows);
+  const [sort, setSort] = useState<Sort>(DEFAULT_SORT);
+  const rows = sortRows(
+    d.hospitals
+      .filter((h) => !filters.county || h.hospital.county === filters.county)
+      .map((row) => ({ row, summary: summarize(row, filters) })),
+    sort,
+  );
+  // Same column again flips the order; a new column starts cheapest (or best score) first.
+  const onSort = (key: SortKey) =>
+    setSort((s) => s.key === key
+      ? { key, dir: s.dir === "asc" ? "desc" : "asc" }
+      : { key, dir: key === "score" ? "desc" : "asc" });
 
   return (
     <>
@@ -278,12 +327,12 @@ function Interactive({ data: d, filters, set }: {
       ) : (
         <>
           <p className="mt-6 text-sm text-muted-foreground" aria-live="polite">
-            {rows.length} hospital{rows.length === 1 ? "" : "s"}, lowest insurer median first
+            {rows.length} hospital{rows.length === 1 ? "" : "s"}, {sortDescription(sort)}
           </p>
           <NoCashNotice total={rows.length} missing={rows.filter((r) => !r.summary.cash).length} />
           <Card className="mt-3 py-0">
             <Table>
-              <PriceTableHead />
+              <PriceTableHead sort={sort} onSort={onSort} />
               <TableBody>
                 {rows.map(({ row, summary }) => (
                   <HospitalRow key={row.hospital.ccn} row={row} summary={summary} />

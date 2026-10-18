@@ -105,6 +105,35 @@ export function compareRows(
   return (a.row.hospital.name ?? "").localeCompare(b.row.hospital.name ?? "");
 }
 
+// The service table's sortable columns. A range sorts by its low end; a hospital without
+// the number goes last whichever way the column is sorted.
+export type SortKey = "median" | "range" | "cash" | "gross" | "score";
+export type Sort = { key: SortKey; dir: "asc" | "desc" };
+export const DEFAULT_SORT: Sort = { key: "median", dir: "asc" };
+
+type Row = { row: HospitalPrices; summary: Summary };
+
+const SORT_VALUE: Record<SortKey, (r: Row) => number | null | undefined> = {
+  median: (r) => r.summary.insurerMedian,
+  range: (r) => r.summary.insurerRange?.low,
+  cash: (r) => r.summary.cash?.low,
+  gross: (r) => r.summary.gross?.low,
+  score: (r) => r.row.hospital.score_pct,
+};
+
+export function sortRows<T extends Row>(rows: T[], sort: Sort): T[] {
+  const value = SORT_VALUE[sort.key];
+  const sign = sort.dir === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const av = value(a);
+    const bv = value(b);
+    if (av != null && bv != null && av !== bv) return sign * (av - bv);
+    if (av != null && bv == null) return -1;
+    if (av == null && bv != null) return 1;
+    return compareRows(a, b); // ties: cheapest insurer median, then name
+  });
+}
+
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
 export function money(value: number | null | undefined): string {

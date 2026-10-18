@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { HospitalPrices } from "./api";
-import { compareRows, median, moneyRange, summarize, titleCase, type Filters } from "./summary";
+import { compareRows, median, moneyRange, sortRows, summarize, titleCase, type Filters } from "./summary";
 
 const ALL: Filters = { county: "", setting: "any", market: "", payer: "" };
 
@@ -82,5 +82,25 @@ describe("helpers", () => {
     expect(titleCase("TUCSON MEDICAL CENTER")).toBe("Tucson Medical Center");
     expect(titleCase("ST JOSEPH'S HOSPITAL")).toBe("St Joseph's Hospital");
     expect(titleCase("BANNER-UNIVERSITY MEDICAL CENTER")).toBe("Banner-University Medical Center");
+  });
+});
+
+describe("sortRows", () => {
+  const make = (ccn: string, cash: number | null, insurer: number, score?: number): HospitalPrices => ({
+    hospital: { ccn, name: ccn, score_pct: score },
+    plans: 1,
+    standard: cash == null ? [] : [{ setting: "outpatient", type: "discounted_cash", amount: cash, n: 1 }],
+    prices: [{ payer: "Aetna", plan: "PPO", setting: "outpatient", type: "negotiated_dollar", amount: insurer, n: 1 }],
+  });
+  const rows = [make("a", 900, 300, 82), make("b", null, 100, 100), make("c", 400, 200)]
+    .map((row) => ({ row, summary: summarize(row, ALL) }));
+  const order = (key: Parameters<typeof sortRows>[1]["key"], dir: "asc" | "desc") =>
+    sortRows(rows, { key, dir }).map((r) => r.row.hospital.ccn);
+
+  it("sorts either way, keeping hospitals without the number last", () => {
+    expect(order("cash", "asc")).toEqual(["c", "a", "b"]);
+    expect(order("cash", "desc")).toEqual(["a", "c", "b"]);
+    expect(order("median", "desc")).toEqual(["a", "c", "b"]);
+    expect(order("score", "desc")).toEqual(["b", "a", "c"]);
   });
 });
