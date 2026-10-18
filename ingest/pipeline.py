@@ -22,6 +22,10 @@ parse holds the file in memory (about 3.5 GB at Arizona's largest, 0.5 GB), so s
 ones at once could exhaust the task's memory, and a worker killed for it would stop every
 other. A big file that still runs out fails alone.
 
+For every state at once, run the hospitals on Spot with --skip-warehouse, then the build
+with --warehouse-only on on-demand capacity: Spot can be stopped at any time (a trial run
+was, 7 minutes in), and a hospital is resumable but a dbt build is not.
+
 Resumable, for a Fargate Spot task that can be stopped at two minutes' notice: a hospital
 downloaded in the last --fresh-days whose rows are in the lake is skipped. The download log
 and parse results are saved every SAVE_EVERY hospitals and when the run ends or is stopped.
@@ -298,12 +302,18 @@ def main() -> None:
                         help="skip hospitals downloaded this recently and in the lake")  # fmt: skip
     parser.add_argument("--skip-warehouse", action="store_true",
                         help="only download, parse and load")  # fmt: skip
+    parser.add_argument("--warehouse-only", action="store_true",
+                        help="skip the hospitals; only build the warehouse and site files "
+                             "(on-demand capacity: a build can't resume after a Spot stop)")  # fmt: skip
     parser.add_argument("--keep-files", action="store_true",
                         help="keep local raw and parsed files (always kept without DATA_BUCKET)")  # fmt: skip
     args = parser.parse_args()
     sys.stdout.reconfigure(line_buffering=True)
     # A Spot interruption sends SIGTERM: unwind through the finally blocks, which save the log.
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
+    if args.warehouse_only:
+        build_warehouse(args.state)
+        return
     rows = run_hospitals(args.state, args.workers, args.limit, args.fresh_days, args.keep_files)
     outcomes = pl.DataFrame(
         {"outcome": [r["outcome"] for r in rows]}, schema={"outcome": pl.String}
