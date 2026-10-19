@@ -209,10 +209,12 @@ def save_reports(entries: list[dict]) -> None:
 
 
 def run_hospitals(states: list[str], workers: int, limit: int | None, fresh_days: int,
-                  keep: bool) -> list[dict]:  # fmt: skip
+                  keep: bool, ccns: list[str] | None = None) -> list[dict]:  # fmt: skip
     """Download, parse and load every hospital to run; returns the attempts recorded."""
     log = source_log.Log()
     todo = hospitals_to_run(states)
+    if ccns:  # a share of the hospitals, for tasks run side by side
+        todo = todo.filter(pl.col("ccn").is_in(ccns))
     loaded = loaded_hospitals()
     done = recently_done(log.before, fresh_days, datetime.now(UTC), loaded)
     done &= set(todo["ccn"])
@@ -364,6 +366,8 @@ def main() -> None:
     parser.add_argument("--state", nargs="+", required=True, help="two-letter state codes")
     parser.add_argument("--workers", type=int, default=os.cpu_count() or 2)
     parser.add_argument("--limit", type=int, help="at most this many hospitals (a trial run)")
+    parser.add_argument("--ccn", nargs="+", help="only these hospitals (to split big files "
+                        "across tasks run side by side)")  # fmt: skip
     parser.add_argument("--fresh-days", type=int, default=7,
                         help="skip hospitals downloaded this recently and in the lake")  # fmt: skip
     parser.add_argument("--skip-warehouse", action="store_true",
@@ -380,7 +384,8 @@ def main() -> None:
     if args.warehouse_only:
         build_warehouse(args.state)
         return
-    rows = run_hospitals(args.state, args.workers, args.limit, args.fresh_days, args.keep_files)
+    rows = run_hospitals(args.state, args.workers, args.limit, args.fresh_days, args.keep_files,
+                         args.ccn)  # fmt: skip
     outcomes = pl.DataFrame(
         {"outcome": [r["outcome"] for r in rows]}, schema={"outcome": pl.String}
     )
