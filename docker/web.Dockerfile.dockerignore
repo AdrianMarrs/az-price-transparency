@@ -5,5 +5,8 @@ web/node_modules
 web/build
 web/.react-router
 web/.env*
+web/public/catalog
+web/app/data/states.json
+web/app/data/prerender.json
 !warehouse/seeds/hospitals.csv
 !warehouse/seeds/shoppable_services.csv

@@ -9,6 +9,10 @@
 //
 // Once the site's own domain is live (domain.tf), any other name it's reached by (www, the
 // CloudFront name) gets a permanent redirect to it. Terraform fills in APEX; empty until then.
+//
+// Arizona's pages from before every state had its own also get a permanent redirect:
+//   /services, /services/cpt-73721, /hospitals  ->  /az/services, /az/services/cpt-73721, /az/hospitals
+// (a hospital's own page, /hospitals/030006, stays where it is).
 var APEX = "${apex}";
 
 function handler(event) {
@@ -16,11 +20,11 @@ function handler(event) {
   var uri = request.uri;
   var host = request.headers.host ? request.headers.host.value : "";
   if (APEX && host !== APEX) {
-    return {
-      statusCode: 301,
-      statusDescription: "Moved Permanently",
-      headers: { location: { value: "https://" + APEX + uri + query(request.querystring) } },
-    };
+    return moved("https://" + APEX + uri + query(request.querystring));
+  }
+  if (uri === "/services" || uri === "/services/" || uri.indexOf("/services/") === 0
+      || uri === "/hospitals" || uri === "/hospitals/") {
+    return moved("/az" + uri + query(request.querystring));
   }
   if (uri.endsWith("/")) {
     request.uri = uri + "index.html";
@@ -28,6 +32,10 @@ function handler(event) {
     request.uri = uri + "/index.html";
   }
   return request;
+}
+
+function moved(location) {
+  return { statusCode: 301, statusDescription: "Moved Permanently", headers: { location: { value: location } } };
 }
 
 // CloudFront hands over the query string parsed ({name: {value, multiValue}}), still

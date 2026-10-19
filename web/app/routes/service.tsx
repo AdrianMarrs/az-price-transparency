@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { comparePrices, type Compare, type Service } from "~/lib/api";
 import { serviceApiId, serviceSlug } from "~/lib/catalog";
+import { stateFor, statePath, type StateSummary } from "~/lib/states";
 import {
   compareRows, DEFAULT_SORT, isPlaceholder, MARKETS, money, moneyRange, sortRows, summarize, titleCase,
   type Filters, type Range, type Setting, type Sort, type SortKey, type Summary,
@@ -24,15 +25,16 @@ type CompactRow = {
   ccn: string; name?: string; city?: string; county?: string; score_pct?: number;
   insurerMedian: number | null; insurerRange: Range; cash: Range; gross: Range; dollarPrices: number;
 };
-type PageData = { service: Service; note: string; compact: CompactRow[]; full: Compare | null };
+type PageData = { state: StateSummary; service: Service; note: string; compact: CompactRow[]; full: Compare | null };
 
 const NO_FILTERS: Filters = { county: "", setting: "any", market: "", payer: "" };
 
-async function fetchCompare(slug: string): Promise<Compare> {
+async function fetchCompare(code: string, slug: string): Promise<[StateSummary, Compare]> {
+  const state = stateFor(code);
   const id = serviceApiId(slug);
-  if (!id) throw data("Not found", { status: 404 });
+  if (!state || !id) throw data("Not found", { status: 404 });
   try {
-    return await comparePrices(serviceSlug(id)); // normalized: "CPT-73721" -> "cpt-73721"
+    return [state, await comparePrices(state.code, serviceSlug(id))]; // normalized: "CPT-73721" -> "cpt-73721"
   } catch {
     throw data("Not found", { status: 404 });
   }
@@ -50,13 +52,13 @@ function compact(c: Compare): CompactRow[] {
 }
 
 export async function loader({ params }: Route.LoaderArgs): Promise<PageData> {
-  const c = await fetchCompare(params.slug);
-  return { service: c.service, note: c.note, compact: compact(c), full: null };
+  const [state, c] = await fetchCompare(params.state, params.slug);
+  return { state, service: c.service, note: c.note, compact: compact(c), full: null };
 }
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs): Promise<PageData> {
-  const c = await fetchCompare(params.slug);
-  return { service: c.service, note: c.note, compact: compact(c), full: c };
+  const [state, c] = await fetchCompare(params.state, params.slug);
+  return { state, service: c.service, note: c.note, compact: compact(c), full: c };
 }
 clientLoader.hydrate = true as const;
 
@@ -66,13 +68,14 @@ const codeLabel = (s: Service) => `${s.code_type === "MS-DRG" ? "MS-DRG" : "CPT/
 export const meta: Route.MetaFunction = ({ loaderData }) => {
   if (!loaderData) return [{ title: "Service not found | Clear Healthcare Prices" }];
   const s = loaderData.service;
+  const name = loaderData.state.name;
   const priced = loaderData.compact.filter((r) => r.insurerMedian != null);
   const low = priced.length ? Math.min(...priced.map((r) => r.insurerMedian!)) : null;
   return [
-    { title: `${serviceName(s)} (${codeLabel(s)}) prices at Arizona hospitals | Clear Healthcare Prices` },
+    { title: `${serviceName(s)} (${codeLabel(s)}) prices at ${name} hospitals | Clear Healthcare Prices` },
     {
       name: "description",
-      content: `Compare ${serviceName(s).toLowerCase()} prices at ${s.hospitals} Arizona hospitals` +
+      content: `Compare ${serviceName(s).toLowerCase()} prices at ${s.hospitals} ${name} hospitals` +
         (low != null ? `, from ${money(low)} (insurer median)` : "") + ". Cash, list and insurer prices from hospitals' own files.",
     },
   ];
@@ -90,7 +93,7 @@ function readFilters(p: URLSearchParams): Filters {
 const ALL = "all";
 
 export default function ServicePage({ loaderData }: Route.ComponentProps) {
-  const { service: s, full, note } = loaderData;
+  const { state, service: s, full, note } = loaderData;
   const [params, setParams] = useSearchParams();
   const filters = readFilters(params);
 
@@ -107,7 +110,7 @@ export default function ServicePage({ loaderData }: Route.ComponentProps) {
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
-        <Link to="/services" className="hover:text-foreground">Services</Link>
+        <Link to={`${statePath(state)}/services`} className="hover:text-foreground">{state.name} services</Link>
         <span aria-hidden className="mx-2">/</span>
         <span className="text-foreground">{serviceName(s)}</span>
       </nav>
@@ -116,13 +119,13 @@ export default function ServicePage({ loaderData }: Route.ComponentProps) {
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <Badge variant="secondary" className="font-mono">{codeLabel(s)}</Badge>
           {s.cms_shoppable_id != null && <Badge variant="outline">CMS shoppable service</Badge>}
-          <span>Priced by {s.hospitals} Arizona hospital{s.hospitals === 1 ? "" : "s"}</span>
+          <span>Priced by {s.hospitals} {state.name} hospital{s.hospitals === 1 ? "" : "s"}</span>
           {s.cms_description && <span>Hospitals bill it as “{s.description}”</span>}
         </div>
       </header>
 
       {full ? (
-        <Interactive data={full} filters={filters} set={set} />
+        <Interactive data={full} state={state} filters={filters} set={set} />
       ) : (
         <StaticTable rows={loaderData.compact} />
       )}
@@ -273,8 +276,8 @@ function HospitalName({ ccn, name, city }: { ccn: string; name?: string; city?: 
   );
 }
 
-function Interactive({ data: d, filters, set }: {
-  data: Compare; filters: Filters; set: (patch: Partial<Filters>) => void;
+function Interactive({ data: d, state, filters, set }: {
+  data: Compare; state: StateSummary; filters: Filters; set: (patch: Partial<Filters>) => void;
 }) {
   const counties = [...new Set(d.hospitals.map((h) => h.hospital.county ?? ""))].filter(Boolean).sort();
   const markets = [...new Set(d.hospitals.flatMap((h) => h.prices.map((p) => p.market ?? "")))].filter((m) => m in MARKETS);
@@ -296,7 +299,7 @@ function Interactive({ data: d, filters, set }: {
       <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Field label="Area">
           <NativeSelect value={filters.county || ALL} onChange={(e) => set({ county: e.target.value === ALL ? "" : e.target.value })}>
-            <option value={ALL}>All of Arizona</option>
+            <option value={ALL}>All of {state.name}</option>
             {counties.map((c) => <option key={c} value={c}>{titleCase(c)} County</option>)}
           </NativeSelect>
         </Field>
@@ -322,7 +325,7 @@ function Interactive({ data: d, filters, set }: {
       {rows.length === 0 ? (
         <Card className="mt-6 px-6 py-10 text-center text-muted-foreground">
           No hospital {filters.county ? `in ${titleCase(filters.county)} County ` : ""}publishes a price for this service.
-          {filters.county && <> <button className="text-primary hover:underline" onClick={() => set({ county: "" })}>Show all of Arizona</button>.</>}
+          {filters.county && <> <button className="text-primary hover:underline" onClick={() => set({ county: "" })}>Show all of {state.name}</button>.</>}
         </Card>
       ) : (
         <>

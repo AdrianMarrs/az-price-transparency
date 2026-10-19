@@ -16,6 +16,7 @@ import mimetypes
 import os
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import boto3
@@ -23,6 +24,7 @@ import boto3
 DIST = Path("web/build/client")
 IMMUTABLE = "public, max-age=31536000, immutable"
 DATA_PREFIX = "data/"  # serving/export_static.py's files: never the deploy's to delete
+UPLOADERS = 32  # files uploaded at a time: a build has about 20,000 (every state's pages)
 
 
 def terraform_outputs() -> dict:
@@ -59,14 +61,19 @@ def main() -> None:
         bucket, distribution = outputs["site_bucket"], outputs["site_distribution_id"]
 
     s3 = boto3.client("s3")
-    keys = []
-    # Pages last, so a page never points at assets that aren't uploaded yet.
-    files = sorted((p for p in DIST.rglob("*") if p.is_file()), key=lambda p: p.suffix == ".html")
-    for path in files:
+
+    def upload(path: Path) -> str:
         key = path.relative_to(DIST).as_posix()
         s3.upload_file(str(path), bucket, key, ExtraArgs={
             "ContentType": content_type(key), "CacheControl": cache_control(key)})  # fmt: skip
-        keys.append(key)
+        return key
+
+    # Pages last, so a page never points at assets that aren't uploaded yet.
+    files = [p for p in DIST.rglob("*") if p.is_file()]
+    keys = []
+    with ThreadPoolExecutor(UPLOADERS) as pool:
+        for batch in ([p for p in files if p.suffix != ".html"], [p for p in files if p.suffix == ".html"]):
+            keys += pool.map(upload, batch)
     existing = [o["Key"] for page in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket)
                 for o in page.get("Contents", [])]  # fmt: skip
     stale = stale_keys(existing, keys)

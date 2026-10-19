@@ -6,7 +6,7 @@ import type { HospitalPrices, Price } from "./api";
 export type Setting = "any" | "outpatient" | "inpatient";
 
 export type Filters = {
-  county: string; // "" = all of Arizona
+  county: string; // "" = the whole state
   setting: Setting;
   market: string; // "" = every market
   payer: string; // matches payer, plan or parent company

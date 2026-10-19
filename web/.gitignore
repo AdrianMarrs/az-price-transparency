@@ -3,3 +3,6 @@ dist/
 build/
 .react-router/
 *.local
+app/data/states.json
+app/data/prerender.json
+public/catalog/

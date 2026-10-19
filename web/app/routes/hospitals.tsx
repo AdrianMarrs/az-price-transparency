@@ -6,27 +6,40 @@ import { Card } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
-import { cities, hospitals, matches } from "~/lib/catalog";
+import { citiesOf, matches } from "~/lib/catalog";
+import { stateData } from "~/lib/state-page";
 import { titleCase } from "~/lib/summary";
+import { useHydrated } from "~/lib/utils";
 
-export const meta: Route.MetaFunction = () => [
-  { title: "Arizona hospitals and their price transparency scores | Clear Healthcare Prices" },
-  { name: "description", content: `All ${hospitals.length} non-federal Arizona hospitals: where each is, what kind of hospital it is, and how well it follows the federal price transparency rules.` },
-];
+export const loader = ({ params }: Route.LoaderArgs) => stateData(params.state);
+export const clientLoader = ({ params }: Route.ClientLoaderArgs) => stateData(params.state);
 
-const TYPES = [...new Set(hospitals.map((h) => h.hospital_type))].sort();
+export const meta: Route.MetaFunction = ({ loaderData }) => {
+  if (!loaderData) return [{ title: "Not found | Clear Healthcare Prices" }];
+  const { state, catalog } = loaderData;
+  return [
+    { title: `${state.name} hospitals and their price transparency scores | Clear Healthcare Prices` },
+    { name: "description", content: `All ${catalog.hospitals.length} non-federal ${state.name} hospitals: where each is, what kind of hospital it is, and how well it follows the federal price transparency rules.` },
+  ];
+};
+
 const ALL = "all";
 type Sort = "name" | "score" | "services";
 
-export default function Hospitals() {
-  const [params, setParams] = useSearchParams();
+export default function Hospitals({ loaderData: { state, catalog } }: Route.ComponentProps) {
+  const { hospitals } = catalog;
+  const cities = citiesOf(hospitals);
+  const types = [...new Set(hospitals.map((h) => h.hospital_type))].sort();
+  const [urlParams, setParams] = useSearchParams();
+  // The page is pre-rendered with no filters; they apply once it has hydrated.
+  const params = useHydrated() ? urlParams : new URLSearchParams();
   const q = params.get("q") ?? "";
   const city = params.get("city") ?? ALL;
   const type = params.get("type") ?? ALL;
   const sort = (params.get("sort") as Sort) ?? "name";
 
   const set = (key: string, value: string, empty = "") => {
-    const next = new URLSearchParams(params);
+    const next = new URLSearchParams(urlParams);
     if (value === empty || value === ALL) next.delete(key);
     else next.set(key, value);
     setParams(next, { replace: true, preventScrollReset: true });
@@ -42,9 +55,9 @@ export default function Hospitals() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-      <h1 className="text-3xl font-semibold tracking-tight">Hospitals</h1>
+      <h1 className="text-3xl font-semibold tracking-tight">{state.name} hospitals</h1>
       <p className="mt-2 max-w-2xl text-muted-foreground">
-        Every non-federal Arizona hospital, scored on the federal price transparency rules we can
+        Every non-federal {state.name} hospital, scored on the federal price transparency rules we can
         check. VA and Indian Health Service hospitals aren't required to publish prices.
       </p>
 
@@ -59,7 +72,7 @@ export default function Hospitals() {
         </NativeSelect>
         <NativeSelect className="sm:w-56" aria-label="Hospital type" value={type} onChange={(e) => set("type", e.target.value)}>
           <option value={ALL}>All types</option>
-          {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          {types.map((t) => <option key={t} value={t}>{t}</option>)}
         </NativeSelect>
         <NativeSelect className="sm:w-52" aria-label="Sort by" value={sort} onChange={(e) => set("sort", e.target.value, "name")}>
           <option value="name">Sort: Name</option>

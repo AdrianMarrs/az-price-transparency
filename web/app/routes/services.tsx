@@ -4,24 +4,35 @@ import type { Route } from "./+types/services";
 import { SearchBox } from "~/components/search-box";
 import { Card, CardContent } from "~/components/ui/card";
 import { categories, featuredServices } from "~/lib/catalog";
+import { stateData } from "~/lib/state-page";
+import { statePath } from "~/lib/states";
 
-export const meta: Route.MetaFunction = () => [
-  { title: "Services: compare prices for common procedures | Clear Healthcare Prices" },
-  { name: "description", content: "CMS's shoppable services by category, from office visits and lab tests to imaging, surgery and childbirth, with prices at every Arizona hospital." },
-];
+export const loader = ({ params }: Route.LoaderArgs) => stateData(params.state);
+export const clientLoader = ({ params }: Route.ClientLoaderArgs) => stateData(params.state);
+
+export const meta: Route.MetaFunction = ({ loaderData }) => {
+  if (!loaderData) return [{ title: "Not found | Clear Healthcare Prices" }];
+  const name = loaderData.state.name;
+  return [
+    { title: `${name} services: compare prices for common procedures | Clear Healthcare Prices` },
+    { name: "description", content: `CMS's shoppable services by category, from office visits and lab tests to imaging, surgery and childbirth, with prices at every ${name} hospital.` },
+  ];
+};
 
 const anchor = (category: string) => category.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
-export default function Services() {
+export default function Services({ loaderData: { state, catalog } }: Route.ComponentProps) {
+  const st = statePath(state);
+  const priced = new Set(catalog.featured);
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-      <h1 className="text-3xl font-semibold tracking-tight">Services</h1>
+      <h1 className="text-3xl font-semibold tracking-tight">{state.name} services</h1>
       <p className="mt-2 max-w-2xl text-muted-foreground">
         These are the {featuredServices.length} services CMS calls “shoppable”: care you can
         schedule ahead, so you can compare. Hospitals price thousands more; search for any
         procedure or billing code.
       </p>
-      <div className="mt-6 max-w-xl"><SearchBox size="sm" /></div>
+      <div className="mt-6 max-w-xl"><SearchBox size="sm" state={state.code} /></div>
 
       <nav aria-label="Categories" className="mt-8 flex flex-wrap gap-2">
         {categories.map((c) => (
@@ -40,8 +51,11 @@ export default function Services() {
                 <ul className="divide-y">
                   {featuredServices.filter((s) => s.category === c).map((s) => (
                     <li key={s.slug}>
-                      <Link to={`/services/${s.slug}`} className="flex items-center justify-between gap-4 px-5 py-3 hover:bg-muted/50">
-                        <span>{s.description}</span>
+                      <Link to={`${st}/services/${s.slug}`} className="flex items-center justify-between gap-4 px-5 py-3 hover:bg-muted/50">
+                        <span className={priced.has(s.slug) ? undefined : "text-muted-foreground"}>
+                          {s.description}
+                          {!priced.has(s.slug) && <span className="ml-2 text-xs">No {state.name} hospital prices it</span>}
+                        </span>
                         <span className="shrink-0 font-mono text-xs text-muted-foreground">
                           {s.code_type === "MS-DRG" ? "DRG" : "CPT"} {s.code}
                         </span>

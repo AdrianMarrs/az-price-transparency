@@ -51,7 +51,7 @@ Every hospital outside Arizona with a price file (Arizona's were already in the 
 
 The download failures:
 
-- **HTTP 403, 78 hospitals.** 62 of them answer a program that sends a browser's User-Agent from home, but not from AWS: Cloudflare and similar services block the cloud's addresses. Two that were checked (410006, 410012) download from a laptop. The other 16 refuse any program.
+- **HTTP 403, 78 hospitals.** 62 of them answer a program that sends a browser's User-Agent from home, but not from AWS: Cloudflare and similar services block the cloud's addresses. The other 16 refuse any program from AWS. All 78 were then run from a laptop (below).
 - **HTTP 404, 12 hospitals.** The cms-hpt.txt file points at a file that's gone.
 - **Out of memory, 2 hospitals.** The worker was killed.
 - **Timed out, 2 hospitals.**
@@ -63,6 +63,18 @@ Over 5 GB: 140281 (IL), 150074 (IN), 240010 (MN, 13.4 GB), 330078 and 330279 (NY
 **The export:** 711,756 files for 51 states (with DC and Puerto Rico; not Arizona, which was already there, or the four other territories, which have no hospitals with prices). Most states have 10,000 to 16,000 files, but Colorado and New York have about 68,000 each. Every in-scope hospital has a profile, with or without prices.
 
 **Cost:** about $12 in all. Roughly $7 was the hospital tasks, and $5 was the warehouse runs (three of them failed) plus 702,188 S3 uploads at $0.005 per 1,000. A rerun with the same data uploads almost nothing, since unchanged files are skipped.
+
+**From a laptop:** the 78 hospitals that answered AWS with a 403 were run through the same pipeline on a home connection (`ingest/pipeline.py --ccn ... --skip-warehouse`, writing to the cloud lake), with the browser fallback (Microsoft Edge) for bot checks:
+
+| Result | Hospitals |
+| --- | ---: |
+| Downloaded and parsed | 60 (2 of them only when run alone; 6 at a time ran out of memory) |
+| Downloaded, but no service codes the site can use | 3 |
+| Downloaded, but the parse failed (330106, 330119) | 2 |
+| Still HTTP 403, even in a browser | 12 (7 in Pennsylvania) |
+| HTTP 404 (443303) | 1 |
+
+The table below is from before this run, so it doesn't count these 60 yet; they reach the site with the next warehouse build and export.
 
 By state ("with prices" counts hospitals with at least one usable price in the lake):
 
@@ -125,6 +137,6 @@ By state ("with prices" counts hospitals with at least one usable price in the l
 ## Still to do
 
 - **Coverage:** 2,910 hospitals outside Arizona have no known website; finding more is the biggest lever. 214 more have a website whose file doesn't name them in a way the matching accepts.
-- **Blocked from the cloud:** the 62 hospitals that refuse AWS's addresses could be downloaded from a home connection and imported into the lake.
+- **Still blocked:** 12 hospitals refuse even a browser on a home connection; someone would have to download their files by hand.
 - **The site:** the data files are written per state (`data/<state>/`); the pages still show Arizona only ([06](06-website.md#limits-and-open-questions)).
 - **Large files:** 45 deferred and 5 over the download limit, until there's a streaming parser.

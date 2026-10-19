@@ -54,6 +54,7 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
+      - run: npm run data  # the tests read the state catalogs it writes
       - run: npm test
       - run: npm run build  # data, type-check, pre-render, move inline scripts out
       - name: build in the container too (docker/web.Dockerfile)

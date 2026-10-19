@@ -1,9 +1,9 @@
 // Reads the site's data: static JSON files that serving/export_static.py writes next to the
-// site, under /data/<state>/. Used in the browser (same origin, so a relative URL) and, for
-// pre-rendered pages, at build time in Node, which needs the site's address (VITE_DATA_URL).
+// site, one folder per state: /data/<state>/. Used in the browser (same origin, so a
+// relative URL) and, for pre-rendered pages, at build time in Node, which needs the site's
+// address (VITE_DATA_URL).
 // In development Vite proxies /data to the live site (vite.config.ts).
 
-const STATE = "az";
 const BASE = typeof window === "undefined" ? (import.meta.env.VITE_DATA_URL ?? "").replace(/\/$/, "") : "";
 
 export type Service = {
@@ -78,14 +78,23 @@ export type ShoppableSummary = {
   plans: number;
 };
 
-// A build pre-renders 170 pages from these files; a busy answer from CloudFront is retried
+// A build pre-renders about 9,000 pages from these files; a busy answer from CloudFront is retried
 // after a growing pause. GETs are safe to repeat.
 const BUSY = new Set([429, 502, 503, 504]);
 export const RETRY_DELAYS_MS = [500, 1000, 2000, 4000, 8000];
 
+// A request that fails outright (a dropped connection, which pre-rendering 16 pages at a
+// time met once in 7,000) is retried the same way; one the page cancelled isn't.
 export async function fetchWithRetry(url: string, signal?: AbortSignal, delays = RETRY_DELAYS_MS) {
   for (let attempt = 0; ; attempt++) {
-    const response = await fetch(url, { signal });
+    let response: Response;
+    try {
+      response = await fetch(url, { signal });
+    } catch (e) {
+      if (signal?.aborted || attempt >= delays.length) throw e;
+      await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+      continue;
+    }
     if (!BUSY.has(response.status) || attempt >= delays.length) return response;
     await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
   }
@@ -93,8 +102,8 @@ export async function fetchWithRetry(url: string, signal?: AbortSignal, delays =
 
 export class NotFound extends Error {}
 
-async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetchWithRetry(`${BASE}/data/${STATE}${path}`, signal);
+async function get<T>(state: string, path: string, signal?: AbortSignal): Promise<T> {
+  const response = await fetchWithRetry(`${BASE}/data/${state.toLowerCase()}${path}`, signal);
   // A missing file comes back as the app shell (CloudFront's fallback for unknown paths),
   // with a 200, so the type tells a data file from a missing one.
   if (response.status === 404 || response.status === 403 || !response.headers.get("content-type")?.includes("json")) {
@@ -104,17 +113,22 @@ async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-// Search runs in the browser over the whole service list (about 13,000 services, 350 KB
-// compressed), fetched once on the first search.
+// Search runs in the browser over a state's whole service list (Arizona's: about 13,000
+// services, 350 KB compressed), fetched once on the first search in that state.
 export type SearchService = Service & { terms?: string };
-let serviceList: Promise<SearchService[]> | null = null;
+const serviceLists = new Map<string, Promise<SearchService[]>>();
 
-export function searchServices(q: string): Promise<Service[]> {
-  serviceList ??= get<SearchService[]>("/search.json").catch((e) => {
-    serviceList = null; // try again next time
-    throw e;
-  });
-  return serviceList.then((list) => findServices(list, q));
+export function searchServices(state: string, q: string): Promise<Service[]> {
+  const key = state.toLowerCase();
+  let list = serviceLists.get(key);
+  if (!list) {
+    list = get<SearchService[]>(key, "/search.json").catch((e) => {
+      serviceLists.delete(key); // try again next time
+      throw e;
+    });
+    serviceLists.set(key, list);
+  }
+  return list.then((l) => findServices(l, q));
 }
 
 // The same rules the API's search used: every word must appear in the code, description or
@@ -133,8 +147,8 @@ export function findServices(list: SearchService[], q: string, limit = 25): Serv
 }
 
 // Filters are applied in the browser, so one file serves every filter choice.
-export const comparePrices = (slug: string, signal?: AbortSignal) =>
-  get<Compare>(`/services/${slug}.json`, signal);
+export const comparePrices = (state: string, slug: string, signal?: AbortSignal) =>
+  get<Compare>(state, `/services/${slug}.json`, signal);
 
-export const hospitalProfile = (ccn: string, signal?: AbortSignal) =>
-  get<Profile>(`/providers/${ccn}.json`, signal);
+export const hospitalProfile = (state: string, ccn: string, signal?: AbortSignal) =>
+  get<Profile>(state, `/providers/${ccn}.json`, signal);

@@ -7,14 +7,17 @@ import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { hospitalProfile, type Profile } from "~/lib/api";
-import { hospital as summaryOf, serviceSlug } from "~/lib/catalog";
+import { serviceSlug } from "~/lib/catalog";
+import { stateOfCcn, statePath, type StateSummary } from "~/lib/states";
 import { failedRules, RULES } from "~/lib/rules";
 import { money, titleCase } from "~/lib/summary";
 
-async function load(ccn: string): Promise<Profile> {
-  if (!summaryOf(ccn)) throw data("Not found", { status: 404 });
+// The hospital's state is in its CCN (its first two digits).
+async function load(ccn: string): Promise<Profile & { state: StateSummary }> {
+  const state = stateOfCcn(ccn);
+  if (!state) throw data("Not found", { status: 404 });
   try {
-    return await hospitalProfile(ccn);
+    return { ...(await hospitalProfile(state.code, ccn)), state };
   } catch {
     throw data("Not found", { status: 404 });
   }
@@ -30,7 +33,7 @@ export const meta: Route.MetaFunction = ({ loaderData }) => {
   const name = titleCase(loaderData.name);
   return [
     { title: `${name} prices and price transparency | Clear Healthcare Prices` },
-    { name: "description", content: `Published prices at ${name} in ${titleCase(loaderData.city)}, AZ: cash, list and insurer prices for common services, and how well it follows the price transparency rules.` },
+    { name: "description", content: `Published prices at ${name} in ${titleCase(loaderData.city)}, ${loaderData.state.code}: cash, list and insurer prices for common services, and how well it follows the price transparency rules.` },
   ];
 };
 
@@ -40,11 +43,12 @@ export default function Hospital({ loaderData: p }: Route.ComponentProps) {
   const failed = failedRules(p.failed_rules);
   const passed = p.rules_passed ?? (p.rules_checked != null ? p.rules_checked - failed.length : null);
   const shoppable = [...(p.shoppable ?? [])].sort((a, b) => a.cms_shoppable_id - b.cms_shoppable_id);
+  const st = statePath(p.state);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
-        <Link to="/hospitals" className="hover:text-foreground">Hospitals</Link>
+        <Link to={`${st}/hospitals`} className="hover:text-foreground">{p.state.name} hospitals</Link>
         <span aria-hidden className="mx-2">/</span>
         <span className="text-foreground">{titleCase(p.name)}</span>
       </nav>
@@ -54,7 +58,7 @@ export default function Hospital({ loaderData: p }: Route.ComponentProps) {
           <h1 className="text-3xl font-semibold tracking-tight text-balance">{titleCase(p.name)}</h1>
           <p className="mt-2 flex items-center gap-1.5 text-muted-foreground">
             <MapPin aria-hidden className="size-4" />
-            {titleCase(p.address)}, {titleCase(p.city)}, AZ {p.zip}
+            {titleCase(p.address)}, {titleCase(p.city)}, {p.state.code} {p.zip}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Badge variant="secondary">{p.hospital_type}</Badge>
@@ -125,7 +129,7 @@ export default function Hospital({ loaderData: p }: Route.ComponentProps) {
                 {shoppable.map((s) => (
                   <TableRow key={s.service_key}>
                     <TableCell className="whitespace-normal pl-6">
-                      <Link to={`/services/${slugFromKey(s.service_key)}`} className="hover:text-primary hover:underline">
+                      <Link to={`${st}/services/${slugFromKey(s.service_key)}`} className="hover:text-primary hover:underline">
                         {s.description}
                       </Link>
                     </TableCell>

@@ -33,7 +33,16 @@ const TYPES = {
 
 const isFile = (path) => stat(path).then((s) => s.isFile(), () => false);
 
-// The same rule as the CloudFront Function in infra/main/site.tf.
+// Arizona's pages from before every state had its own: their new address, as the CloudFront
+// Function (infra/main/site_router.js) redirects them.
+export function moved(urlPath) {
+  const [path, search] = urlPath.split(/(?=\?)/);
+  const old = path === "/services" || path === "/services/" || path.startsWith("/services/")
+    || path === "/hospitals" || path === "/hospitals/";
+  return old ? `/az${path}${search ?? ""}` : null;
+}
+
+// The same rule as the CloudFront Function in infra/main/site_router.js.
 export async function resolve(urlPath) {
   const path = normalize(join(ROOT, decodeURIComponent(urlPath.split("?")[0])));
   if (!path.startsWith(normalize(ROOT))) return null;
@@ -48,6 +57,11 @@ createServer(async (req, res) => {
     const type = upstream.headers.get("content-type") ?? "application/octet-stream";
     res.writeHead(upstream.status, { ...HEADERS, "Content-Type": type });
     res.end(Buffer.from(await upstream.arrayBuffer()));
+    return;
+  }
+  const location = moved(req.url ?? "/");
+  if (location) {
+    res.writeHead(301, { ...HEADERS, Location: location }).end();
     return;
   }
   const file = await resolve(req.url ?? "/");

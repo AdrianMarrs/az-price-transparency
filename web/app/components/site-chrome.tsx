@@ -3,6 +3,7 @@
 import { NavLink, Link } from "react-router";
 
 import { SearchBox } from "~/components/search-box";
+import { statePath, type StateSummary } from "~/lib/states";
 import { cn } from "~/lib/utils";
 
 export function Logo({ className }: { className?: string }) {
@@ -15,13 +16,20 @@ export function Logo({ className }: { className?: string }) {
   );
 }
 
-const NAV = [
-  { to: "/services", label: "Services" },
-  { to: "/hospitals", label: "Hospitals" },
-  { to: "/methods", label: "How it works" },
-];
+// A state's pages when the page is about one; otherwise the state picker.
+function nav(state?: StateSummary) {
+  const methods = { to: "/methods", label: "How it works" };
+  if (!state) return [{ to: "/", label: "States" }, methods];
+  const st = statePath(state);
+  return [
+    { to: `${st}/services`, label: "Services" },
+    { to: `${st}/hospitals`, label: "Hospitals" },
+    methods,
+  ];
+}
 
-export function SiteHeader() {
+export function SiteHeader({ state }: { state?: StateSummary }) {
+  const NAV = nav(state);
   return (
     <header className="sticky top-0 z-40 border-b bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
       <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4 sm:px-6">
@@ -29,11 +37,21 @@ export function SiteHeader() {
           <Logo className="size-8" />
           <span className="text-sm leading-tight sm:text-base">Clear Healthcare Prices</span>
         </Link>
+        {state && (
+          <Link
+            to={statePath(state)}
+            className="hidden shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary sm:inline-block"
+            title={`${state.name}'s home page`}
+          >
+            {state.name}
+          </Link>
+        )}
         <nav aria-label="Main" className="ml-2 hidden items-center gap-1 md:flex">
           {NAV.map((n) => (
             <NavLink
               key={n.to}
               to={n.to}
+              end={n.to === "/"}
               className={({ isActive }) => cn(
                 "rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground",
                 isActive && "text-foreground font-medium",
@@ -43,11 +61,11 @@ export function SiteHeader() {
             </NavLink>
           ))}
         </nav>
-        {/* Hidden by CSS, not by route, on the home page (it has its own big search box): the
-            app shell for pages that aren't pre-rendered is rendered at "/", and the first
-            render in the browser must match it. */}
+        {/* Hidden by CSS, not by route, on the home pages (the country's and each state's),
+            which have their own big search box: the app shell for pages that aren't
+            pre-rendered is rendered at "/", and the first render in the browser must match it. */}
         <div className="ml-auto w-full max-w-sm in-[body:has([data-home-hero])]:hidden">
-          <SearchBox size="sm" />
+          <SearchBox size="sm" state={state?.code} />
         </div>
       </div>
       <nav aria-label="Main" className="flex gap-1 overflow-x-auto border-t px-2 md:hidden">
@@ -55,6 +73,7 @@ export function SiteHeader() {
           <NavLink
             key={n.to}
             to={n.to}
+            end={n.to === "/"}
             className={({ isActive }) => cn("px-3 py-2 text-sm text-muted-foreground", isActive && "text-foreground font-medium")}
           >
             {n.label}
@@ -76,8 +95,8 @@ export function SiteFooter() {
             insurer and the hospital for an estimate before you book.
           </p>
           <p>
-            Hospital prices come from each hospital's machine-readable price file, checked weekly;
-            insurer rates from insurers' Transparency in Coverage files, monthly.
+            Hospital prices come from each hospital's machine-readable price file, as downloaded
+            in October 2026.
           </p>
         </div>
         <div className="space-y-2">

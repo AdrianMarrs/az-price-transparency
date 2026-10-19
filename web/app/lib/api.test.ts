@@ -29,6 +29,28 @@ describe("fetchWithRetry", () => {
     expect((await fetchWithRetry("https://api/x", undefined, [0])).status).toBe(404);
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+
+  it("retries a dropped connection, then gives up with its error", async () => {
+    const fetch = vi.fn()
+      .mockRejectedValueOnce(new TypeError("fetch failed"))
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetch);
+    expect((await fetchWithRetry("https://api/x", undefined, [0])).status).toBe(200);
+
+    const failing = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
+    vi.stubGlobal("fetch", failing);
+    await expect(fetchWithRetry("https://api/x", undefined, [0, 0])).rejects.toThrow("fetch failed");
+    expect(failing).toHaveBeenCalledTimes(3);
+  });
+
+  it("doesn't retry a request the page cancelled", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const fetch = vi.fn().mockRejectedValue(new DOMException("aborted", "AbortError"));
+    vi.stubGlobal("fetch", fetch);
+    await expect(fetchWithRetry("https://api/x", controller.signal, [0])).rejects.toThrow("aborted");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("findServices", () => {

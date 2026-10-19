@@ -2,7 +2,7 @@ import { Link } from "react-router";
 
 import type { Route } from "./+types/methods";
 import { Card, CardContent } from "~/components/ui/card";
-import { hospitals } from "~/lib/catalog";
+import { states } from "~/lib/states";
 import { RULES } from "~/lib/rules";
 
 export const meta: Route.MetaFunction = () => [
@@ -10,29 +10,33 @@ export const meta: Route.MetaFunction = () => [
   { name: "description", content: "Where the prices come from, how often they're refreshed, how hospitals are scored, and what published prices can't tell you." },
 ];
 
+const hospitals = states.reduce((n, s) => n + s.hospitals, 0);
+
 export default function Methods() {
   return (
     <article className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
       <h1 className="text-3xl font-semibold tracking-tight">How it works, and its limits</h1>
       <p className="mt-4 text-lg text-muted-foreground text-pretty">
         Two federal rules make hospitals and insurers publish their prices. This site reads those
-        files for Arizona and puts the numbers side by side.
+        files for every state and puts the numbers side by side.
       </p>
 
       <Section title="Where the prices come from">
         <p>
           <strong>Hospitals.</strong> Since 2021 every hospital must post a machine-readable file of
           its standard charges: the list price, the discounted cash price, and the price it has
-          negotiated with each insurer and plan. We find each of Arizona's {hospitals.length} non-federal
-          hospitals' files through the <code>cms-hpt.txt</code> file the rule requires on its website,
-          download it every week, and read it in CMS's template format.
+          negotiated with each insurer and plan. We look for each of the {hospitals.toLocaleString()}
+          non-federal hospitals' files through the <code>cms-hpt.txt</code> file the rule requires on
+          its website, download it, and read it in CMS's template format. The prices here were
+          downloaded in October 2026. We find a file for about a quarter of hospitals outside
+          Arizona so far; a hospital without one is listed with no prices.
         </p>
         <p>
           <strong>Insurers.</strong> The Transparency in Coverage rule makes insurers publish the
           rates they've agreed with every provider in their networks. These files are enormous
           (one insurer's are about 30 GB compressed, hundreds of gigabytes as text), so they're
-          streamed once a month and only the rates for Arizona hospitals are kept. We start with
-          Cigna.
+          streamed and only the rates for hospitals we cover are kept. We've started with Cigna's
+          rates for Arizona hospitals; they aren't on these pages yet.
         </p>
       </Section>
 
