@@ -1,4 +1,9 @@
-{{ config(indexes=[{'columns': ['service_key', 'geography']}]) }}
+{%- set buckets = 16 -%}
+{%- set hooks = [] -%}
+{%- for b in range(1, buckets) -%}
+    {%- do hooks.append('insert into {{ this }} {{ price_summary_bucket(' ~ b ~ ', ' ~ buckets ~ ') }}') -%}
+{%- endfor -%}
+{{ config(indexes=[{'columns': ['service_key', 'geography']}], post_hook=hooks) }}
 
 -- Price statistics per service, for first-pass comparisons before drilling into fct_prices.
 --
@@ -8,53 +13,8 @@
 -- averages would weight a state with 12 prices like one with 10,000. sum and count are
 -- kept so averages can be recombined correctly anywhere.
 
-with prices as (
-    select
-        f.state,
-        f.service_key,
-        f.setting,
-        f.billing_class,
-        f.price_type,
-        p.market,
-        f.amount
-    from {{ ref('fct_prices') }} as f
-    -- market comes from payer + plan (a "Work Comp" plan under a commercial payer)
-    left join {{ ref('dim_payer_plans') }} as p
-        on p.payer_name = f.payer_name and p.plan_name is not distinct from f.plan_name
-    where f.source = 'hospital'
-      and f.price_type in ('negotiated_dollar', 'discounted_cash', 'gross')
-      and coalesce(p.market, '') not in ('self_pay')
-      -- $1-or-less insurer prices are case-rate placeholders, not prices
-      and not (f.price_type = 'negotiated_dollar' and coalesce(f.amount <= 1, false))
-),
+-- Built in 16 buckets of services, one statement each so each holds 1/16 of the prices in
+-- memory (macros/price_summary.sql): the first bucket creates the table, the rest are
+-- inserted after it.
 
-summarized as (
-    select
-        case when grouping(state) = 1 then 'US' else state end as geography,
-        service_key,
-        setting,
-        billing_class,
-        price_type,
-        case when grouping(market) = 1 then 'all' else coalesce(market, 'none') end as market,
-        count(*) as prices,
-        sum(amount) as total_amount,
-        round(sum(amount) / count(*), 2) as mean_amount,
-        min(amount) as min_amount,
-        percentile_cont(0.25) within group (order by amount) as p25_amount,
-        percentile_cont(0.50) within group (order by amount) as median_amount,
-        percentile_cont(0.75) within group (order by amount) as p75_amount,
-        max(amount) as max_amount
-    from prices
-    group by grouping sets (
-        (state, service_key, setting, billing_class, price_type, market),
-        (state, service_key, setting, billing_class, price_type),
-        (service_key, setting, billing_class, price_type, market),
-        (service_key, setting, billing_class, price_type)
-    )
-)
-
-select
-    md5((geography, service_key, setting, billing_class, price_type, market)::text)
-        as summary_key,
-    *
-from summarized
+{{ price_summary_bucket(0, buckets) }}
