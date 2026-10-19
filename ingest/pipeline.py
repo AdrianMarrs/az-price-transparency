@@ -187,10 +187,14 @@ def run_big(big: list[tuple[dict, str]], keep: bool) -> list[dict]:
             future = pool.submit(parse_and_load, row["ccn"], state, Path(row["path"]),
                                  row["id"], keep_file)  # fmt: skip
             try:
-                entry = future.result()
+                entry = future.result(timeout=JOB_LIMIT_SECONDS)
             except BrokenProcessPool:
                 entry = {"ccn": row["ccn"], "path": row["path"], "outcome": "failed",
                          "error": "the parse ran out of memory"}  # fmt: skip
+            except TimeoutError:  # one Mercy file held a task for over 2 hours
+                kill(pool)
+                entry = {"ccn": row["ccn"], "path": row["path"], "outcome": "failed",
+                         "error": f"the parse took over {JOB_LIMIT_SECONDS / 60:g} minutes"}  # fmt: skip
         print(f"{row['ccn']}  big file ({row['size_bytes'] / 1e9:.1f} GB)  {entry['outcome']}")
         entries.append(entry)
     return entries
