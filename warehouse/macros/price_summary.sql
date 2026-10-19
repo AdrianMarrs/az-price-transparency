@@ -1,9 +1,4 @@
--- The query behind marts.price_summary, for one bucket of services: those whose
--- hash(service_key) % buckets is the given number. Exact quartiles keep every price of a
--- group in memory, outside DuckDB's memory limit and with no spilling to disk, and across
--- the country that outgrew a 120 GB task (October 2026). Every grouping set includes the
--- service, so the buckets split the groups cleanly and each statement holds only its
--- share of the prices.
+-- The query behind marts.price_summary, for one bucket of services (macros/bucket_hooks.sql).
 
 {% macro price_summary_bucket(bucket, buckets) %}
     with prices as (
