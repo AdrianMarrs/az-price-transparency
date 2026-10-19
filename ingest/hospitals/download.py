@@ -88,7 +88,7 @@ def stream_to_gzip(response: httpx.Response, dest: Path) -> tuple[str, int]:
     part = dest.with_name(dest.name + ".part")
     deadline = time.monotonic() + DOWNLOAD_DEADLINE_SECONDS
     with gzip.open(part, "wb", compresslevel=6) as out:
-        for chunk in response.iter_bytes(CHUNK):
+        for chunk in response.iter_bytes():  # as it arrives, so the deadline is checked often
             if time.monotonic() > deadline:
                 out.close()
                 part.unlink(missing_ok=True)

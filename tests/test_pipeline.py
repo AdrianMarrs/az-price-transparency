@@ -120,8 +120,9 @@ def test_national_sources_keep_the_curated_rows():
 def test_a_big_file_is_left_for_later(tmp_path, monkeypatch):
     path = raw_copy(tmp_path)
     row = {"ccn": "030006", "url": "u", "outcome": "downloaded", "path": str(path),
-           "size_bytes": pipeline.BIG_BYTES + 1}  # fmt: skip
+           "size_bytes": 1000}  # fmt: skip
     monkeypatch.setattr(pipeline.download, "download", lambda *a: dict(row))
+    monkeypatch.setattr(pipeline, "BIG_BYTES", 1000)  # the fixture's CSV is bigger
     job = pipeline.Job("030006", "AZ", "u", None)
     result = pipeline.process(job, tmp_path, keep=False)
     assert result["big"] and result["entry"] is None and result["row"]["id"] > 0
@@ -205,3 +206,17 @@ def test_a_hospital_over_the_time_limit_is_stopped_and_the_rest_go_on(tmp_path, 
             leftover.unlink()
     assert rows["999990"]["outcome"] == "failed" and "not done after" in rows["999990"]["error"]
     assert rows["999991"]["outcome"] == "downloaded"
+
+
+def test_a_zip_is_sized_by_the_file_inside(tmp_path):
+    import io
+    import zipfile
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("charges.csv", "x" * 5_000_000)  # compresses to a few KB
+    path = tmp_path / "030006_charges.zip.gz"
+    path.write_bytes(gzip.compress(buffer.getvalue()))
+    assert path.stat().st_size < 100_000
+    assert parse.content_size(path) == 5_000_000
+    assert parse.content_size(raw_copy(tmp_path)) == FIXTURE.stat().st_size

@@ -54,7 +54,7 @@ from ingest.hospitals import browser, compliance, download, payer_plans, source_
 from ingest.hospitals.find_sources import USER_AGENT
 from ingest.hospitals.load import HOSPITALS_PATH, write_hospital
 from ingest.hospitals.load import SCHEMA as CHARGES_SCHEMA
-from ingest.hospitals.parse import PARSED_DIR, load_shoppable, parse_one
+from ingest.hospitals.parse import PARSED_DIR, content_size, load_shoppable, parse_one
 from ingest.insurers.load import KEYS as INSURER_KEYS
 from ingest.insurers.normalize import SCHEMA as INSURER_SCHEMA
 from ingest.storage import upload
@@ -141,7 +141,7 @@ def process_one(job: Job, day_dir: Path, keep: bool, started: datetime) -> dict:
     if row["outcome"] == "downloaded":
         row["s3_uri"] = upload(Path(row["path"]))
         keep_file = keep or row["s3_uri"] is None  # never delete the only copy
-        if (row.get("size_bytes") or 0) > BIG_BYTES:
+        if content_size(Path(row["path"])) > BIG_BYTES:  # a zip's CSV, not the zip
             big = True  # parsed later, alone (run_big)
         else:
             entry = parse_and_load(job.ccn, job.state, Path(row["path"]), row["id"], keep_file)

@@ -518,6 +518,19 @@ def original_size(path: Path) -> int:
         return int.from_bytes(f.read(4), "little")
 
 
+def content_size(path: Path) -> int:
+    """Bytes the parser will read: a zip's largest CSV or JSON member, else the file's
+    uncompressed size. Mercy's 145 MB zips hold 2.9 GB CSVs."""
+    if sniff_format(path) != "zip":
+        return original_size(path)
+    opener = gzip.open if path.suffix == ".gz" else open
+    with opener(path, "rb") as f, zipfile.ZipFile(io.BytesIO(f.read())) as z:
+        sizes = [
+            m.file_size for m in z.infolist() if m.filename.lower().endswith((".csv", ".json"))
+        ]
+    return max(sizes, default=0)
+
+
 def extract_zip(path: Path, work_dir: Path) -> Path:
     """Extract the largest CSV or JSON member of a (possibly gzipped) zip file."""
     opener = gzip.open if path.suffix == ".gz" else open
@@ -653,7 +666,7 @@ def parse_one(ccn: str, path: Path, shoppable: pl.DataFrame) -> dict:
     """Parse one hospital's newest file and write its outputs; never raises."""
     PARSED_DIR.mkdir(parents=True, exist_ok=True)
     entry = {"ccn": ccn, "path": path.as_posix(), "format": sniff_format(path)}
-    size = original_size(path)
+    size = content_size(path)
     limit = MAX_JSON_BYTES if entry["format"] == "json" else MAX_CSV_BYTES
     if size > limit:
         return entry | {"outcome": "deferred_too_large",
