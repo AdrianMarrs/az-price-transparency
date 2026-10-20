@@ -34,14 +34,18 @@ Prices are compared within a state, so most pages belong to one: `/tx/services/c
 | `/hospitals/:ccn` | `hospital.tsx` | every hospital with a profile (5,222) | `data/<st>/providers/<ccn>.json` |
 | `/search?q=&state=` | `search.tsx` | no | the state's `search.json` and catalog; with no state, the hospital index |
 | `/methods` | `methods.tsx` | yes | built in: the rules (`lib/rules.ts`) |
+| `/privacy` | `privacy.tsx` | yes | none |
+| `/support` | `support.tsx` | yes | none: how to allow ads, share, report errors (AdSense's ad blocker message links here) |
+| `/compare?service=&a=&b=&market=` | `compare.tsx` | yes, with its defaults | both states' `services/<slug>.json`, fetched in the browser |
 | `/services`, `/services/:slug`, `/hospitals` | `legacy.tsx` | no | none: Arizona's old addresses, redirected to `/az/…` |
 | anything else | `not-found.tsx` | no | none |
 
-That makes 9,128 pre-rendered pages. Any other URL is served the app shell (`__spa-fallback.html`), and the page renders in the browser. A service that isn't featured, such as one found through search, works this way. The 52 "states" are the 50 states, DC and Puerto Rico; the other four territories have no hospitals with prices yet.
+That makes 9,131 pre-rendered pages. Any other URL is served the app shell (`__spa-fallback.html`), and the page renders in the browser. A service that isn't featured, such as one found through search, works this way. The 52 "states" are the 50 states, DC and Puerto Rico; the other four territories have no hospitals with prices yet.
 
 What each page does:
 
 - **Home** picks a state: a menu, and a grid showing how many of each state's hospitals publish prices we can read. Its search box finds hospitals and states.
+- **Compare** puts two states side by side for one featured service, optionally for one insurance market. For each state it shows the mean of its hospitals' insurer medians (each hospital counts once; not weighted by volume, which the files don't give), the median hospital, the lowest and highest, and the mean of each hospital's lowest cash price, then the difference. The home page has a short form that opens it (October 2026).
 - **A state's home** has the state's search box, common services (ones the state doesn't price are dimmed), "who follows the rules" (hospitals by transparency score), and its counts.
 - **Services** lists the featured services by category, with a search box, and marks those no hospital in the state prices.
 - **Service** is the main comparison. Each row is one hospital in the state, showing the insurer median, insurer range, cash and gross prices, and the hospital's score.
@@ -57,7 +61,7 @@ What each page does:
 ## Shared pieces
 
 - `app/root.tsx` holds the document layout (skip link, `<main>`) and the page around it: `SiteHeader` and `SiteFooter` (`components/site-chrome.tsx`, with the "Clear Healthcare Prices" logo).
-  - The header takes the page's state, from the URL or the hospital's CCN. Its links go to that state's services and hospitals, a chip names the state, and its search box searches it. On a page with no state, the links are "States" and "How it works".
+  - The header takes the page's state, from the URL or the hospital's CCN. Its links go to that state's services and hospitals, and its search box searches it. The state's name next to the site's name is a menu: picking another state opens the same page there (a featured service the new state doesn't price opens its services list; a hospital page opens the state's home). On a page with no state, the links are "States", "Compare" and "How it works".
   - The app component renders the header, not the layout, because the app shell is one file for every URL. The shell's own header (in `HydrateFallback`) has no state, so hydrating it anywhere matches.
   - `ErrorBoundary` is the 404 and error page.
 - `components/search-box.tsx` is the search box. On a state's pages it suggests the state's hospitals and cities (from its catalog) and its services (from its `search.json`); elsewhere, hospitals anywhere (from the hospital index) and states. Each list is fetched on the first search that needs it.
@@ -154,10 +158,21 @@ The result is `web/build/client`. `docker/web.Dockerfile` builds the same output
 - `app/lib/*.test.ts`:
   - `api.test.ts`: retries, not-found handling, service search.
   - `catalog.test.ts`: hospital and city search over Arizona's catalog, slugs, states by URL code and by CCN, state search.
-  - `summary.test.ts`: medians, placeholders, filters, sorting.
+  - `summary.test.ts`: medians, placeholders, filters, sorting, state averages.
   - `encoding.test.ts`: catches text garbled from UTF-8 read back as Windows-1252.
 - `scripts/externalize-inline-scripts.test.mjs`.
 - On the Python side, `tests/test_export_static.py` covers the data files, including a two-state warehouse.
+
+## Ads
+
+Google AdSense, added October 2026 and off until the account exists (`components/ad-slot.tsx`).
+
+- **Switched by the build.** `VITE_ADSENSE_CLIENT` (the publisher ID) adds the `google-adsense-account` meta tag, Google's script and `ads.txt` (a Vite plugin in `vite.config.ts`); that's what AdSense checks when it reviews the site. `VITE_ADSENSE_SLOT` (a display ad unit) then turns the ads on. With neither, no Google code reaches the site.
+- **Placed by hand.** One labelled ad on a state's home, a service page, a hospital page and the comparison page, never inside a price table. Auto ads should stay off in AdSense, or Google may put ads anywhere, tables included.
+- **Not personalized.** The script is asked for non-personalized ads (`requestNonPersonalizedAds`). The pages are about people's health care, so ads follow the page's own content, its state and procedure, which AdSense reads from the page; nothing about the visitor is sent for targeting. AdSense has no way to pass the state or procedure as keys; that needs Google Ad Manager.
+- **Content Security Policy.** Google's script, frames and images are allowed only when Terraform's `adsense` variable is true (`infra/main/site.tf`); ads also need `style-src 'unsafe-inline'`. The site's own scripts stay `'self'`. `serve-build.mjs` uses the same policy when the build has a publisher ID.
+- **Privacy page.** `/privacy` says the site sets no cookies of its own and keeps no visit logs, and discloses Google's cookies, as AdSense's program policies require.
+- **Hydration.** The script is added after hydration, and each ad is remounted when the page changes (AdSense fills an `<ins>` once), so pre-rendered markup is never changed before React hydrates it.
 
 ## Limits and open questions
 

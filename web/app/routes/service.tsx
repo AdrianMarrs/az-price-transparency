@@ -3,6 +3,7 @@ import { Fragment, useState } from "react";
 import { data, Link, useSearchParams } from "react-router";
 
 import type { Route } from "./+types/service";
+import { AdSlot } from "~/components/ad-slot";
 import { ScoreBadge } from "~/components/score-badge";
 import { Badge } from "~/components/ui/badge";
 import { Card } from "~/components/ui/card";
@@ -130,6 +131,7 @@ export default function ServicePage({ loaderData }: Route.ComponentProps) {
         <StaticTable rows={loaderData.compact} />
       )}
       <p className="mt-6 text-sm text-muted-foreground">{note}</p>
+      <AdSlot className="mt-10 px-0 sm:px-0" />
     </div>
   );
 }

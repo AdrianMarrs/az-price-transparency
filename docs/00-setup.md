@@ -21,6 +21,8 @@ Phase 0 gives the project a reproducible local stack, automated checks on every 
 ## Decisions worth noting
 
 - **No long-lived AWS keys.** The CLI signs in with `aws login`, which issues short-lived credentials through the browser. CI will use GitHub OIDC in Phase 3 for the same reason.
+  - Tools that can't read `aws login` credentials themselves (Terraform, DuckDB) get them as environment variables: `eval "$(aws configure export-credentials --profile az-price --format env)"`.
+  - In Git Bash, first run `export MSYS2_ENV_CONV_EXCL='*'`. Otherwise Git Bash rewrites any value that starts with `/` as a Windows path when it starts a Windows program. A secret key can start with `/`, and then every request fails with `SignatureDoesNotMatch` (October 2026).
 - **Free plan over budget alerts.** A budget alert only sends email; on the Free plan the account simply cannot be billed. The trade-off is a 6-month limit and a restricted service list, which is acceptable until Phase 3.
 - **LF line endings.** `.gitattributes` forces LF so files behave the same in Windows, Linux containers and CI.
 - **Data never enters Git.** `data/` is ignored; raw downloads go to local disk now and S3 later.

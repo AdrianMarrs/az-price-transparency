@@ -26,6 +26,9 @@ export default {
       const paths = [
         "/",
         "/methods",
+        "/compare",
+        "/privacy",
+        "/support",
         ...Object.entries(pages.services).flatMap(([state, slugs]) => {
           const st = `/${state.toLowerCase()}`;
           return [st, `${st}/services`, `${st}/hospitals`, ...slugs.map((slug) => `${st}/services/${slug}`)];

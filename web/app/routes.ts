@@ -4,6 +4,9 @@ export default [
   index("routes/home.tsx"),
   route("methods", "routes/methods.tsx"),
   route("search", "routes/search.tsx"),
+  route("compare", "routes/compare.tsx"),
+  route("privacy", "routes/privacy.tsx"),
+  route("support", "routes/support.tsx"),
   route("hospitals/:ccn", "routes/hospital.tsx"),
   // Before every state had pages, Arizona's were at /services and /hospitals.
   route("services", "routes/legacy.tsx", { id: "legacy-services" }),

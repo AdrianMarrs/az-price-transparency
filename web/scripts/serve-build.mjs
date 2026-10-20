@@ -13,14 +13,21 @@ import { extname, join, normalize } from "node:path";
 
 const ROOT = new URL("../build/client/", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
 const PORT = Number(process.argv[2] ?? 4173);
-const env = await readFile(new URL("../.env.local", import.meta.url), "utf8").catch(() => "");
+const read = (name) => readFile(new URL(`../${name}`, import.meta.url), "utf8").catch(() => "");
+const env = [await read(".env.local"), await read(".env.production")].join("\n");
 const DATA = (process.env.VITE_DATA_URL ?? env.match(/^VITE_DATA_URL=(.+)$/m)?.[1]?.trim() ?? "https://clearhealthcareprices.com").replace(/\/$/, "");
 
+// infra/main/site.tf's two policies: without ads, and with AdSense (var.adsense).
+const GOOGLE_ADS = "https://*.googlesyndication.com https://*.doubleclick.net https://*.google.com https://*.adtrafficquality.google https://*.googleadservices.com https://*.gstatic.com";
+const ADS = /^VITE_ADSENSE_CLIENT=\S/m.test(env) || Boolean(process.env.VITE_ADSENSE_CLIENT);
+const CSP = ADS
+  ? ["default-src 'self'", `connect-src 'self' ${GOOGLE_ADS}`, "img-src 'self' data: https:",
+    "style-src 'self' 'unsafe-inline'", `script-src 'self' ${GOOGLE_ADS}`, `frame-src ${GOOGLE_ADS}`, "frame-ancestors 'none'"]
+  : ["default-src 'self'", "connect-src 'self'", "img-src 'self' data:",
+    "style-src 'self'", "script-src 'self'", "frame-ancestors 'none'"];
+
 const HEADERS = {
-  "Content-Security-Policy": [
-    "default-src 'self'", "connect-src 'self'", "img-src 'self' data:",
-    "style-src 'self'", "script-src 'self'", "frame-ancestors 'none'",
-  ].join("; "),
+  "Content-Security-Policy": CSP.join("; "),
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "strict-origin-when-cross-origin",

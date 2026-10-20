@@ -38,3 +38,9 @@ variable "pipeline_schedule_enabled" {
   type        = bool
   default     = false
 }
+
+variable "adsense" {
+  description = "Let Google AdSense's scripts, frames and images through the site's Content Security Policy (web/app/components/ad-slot.tsx). On since the AdSense account exists (October 2026)."
+  type        = bool
+  default     = true
+}

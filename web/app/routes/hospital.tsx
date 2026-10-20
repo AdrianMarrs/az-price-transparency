@@ -2,6 +2,7 @@ import { CircleCheck, CircleX, ExternalLink, MapPin } from "lucide-react";
 import { data, Link } from "react-router";
 
 import type { Route } from "./+types/hospital";
+import { AdSlot } from "~/components/ad-slot";
 import { ScoreBadge } from "~/components/score-badge";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
@@ -144,6 +145,7 @@ export default function Hospital({ loaderData: p }: Route.ComponentProps) {
         </Card>
       </div>
       <p className="mt-6 text-sm text-muted-foreground">{p.note}</p>
+      <AdSlot className="mt-10 px-0 sm:px-0" />
     </div>
   );
 }

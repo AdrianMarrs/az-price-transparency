@@ -1,6 +1,7 @@
 import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration, useMatches } from "react-router";
 
 import type { Route } from "./+types/root";
+import { ADSENSE_CLIENT, adsenseOn, useAdSense } from "~/components/ad-slot";
 import { SiteFooter, SiteHeader } from "~/components/site-chrome";
 import { Skeleton } from "~/components/ui/skeleton";
 import { TooltipProvider } from "~/components/ui/tooltip";
@@ -18,6 +19,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#0f3b46" />
+        {adsenseOn && <meta name="google-adsense-account" content={ADSENSE_CLIENT} />}
         <Meta />
         <Links />
       </head>
@@ -53,6 +55,7 @@ function Page({ state, children }: { state?: StateSummary; children: React.React
 }
 
 export default function App() {
+  useAdSense();
   return <Page state={useCurrentState()}><Outlet /></Page>;
 }
 

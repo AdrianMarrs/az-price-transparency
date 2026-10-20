@@ -1,9 +1,11 @@
-import { FileSearch, Scale, ShieldCheck } from "lucide-react";
+import { ArrowRight, FileSearch, Scale, ShieldCheck } from "lucide-react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 
 import type { Route } from "./+types/home";
 import { SearchBox } from "~/components/search-box";
 import { NativeSelect } from "~/components/ui/native-select";
+import { categories, featuredServices } from "~/lib/catalog";
 import { statePath, states } from "~/lib/states";
 
 const hospitals = states.reduce((n, s) => n + s.hospitals, 0);
@@ -39,7 +41,7 @@ export default function Home() {
             <label className="sr-only" htmlFor="state-picker">Your state</label>
             <NativeSelect
               id="state-picker"
-              className="h-14 bg-card text-base"
+              selectClassName="h-14 rounded-lg pl-4 text-base text-foreground"
               defaultValue=""
               onChange={(e) => e.target.value && navigate(statePath(e.target.value))}
             >
@@ -86,6 +88,8 @@ export default function Home() {
         </ul>
       </section>
 
+      <CompareStates />
+
       <section className="mx-auto mt-20 max-w-6xl px-4 sm:px-6" aria-labelledby="how-heading">
         <h2 id="how-heading" className="text-2xl font-semibold tracking-tight">How it works</h2>
         <div className="mt-6 grid gap-6 sm:grid-cols-3">
@@ -109,5 +113,53 @@ export default function Home() {
         </p>
       </section>
     </>
+  );
+}
+
+// A short form that opens the comparison page with its choices.
+function CompareStates() {
+  const [service, setService] = useState("cpt-73721");
+  const [a, setA] = useState("AZ");
+  const [b, setB] = useState("CA");
+  const to = `/compare?${new URLSearchParams({ service, a: a.toLowerCase(), b: b.toLowerCase() })}`;
+  const statePicker = (label: string, value: string, set: (v: string) => void) => (
+    <label>
+      <span className="mb-1.5 block text-sm font-medium">{label}</span>
+      <NativeSelect value={value} onChange={(e) => set(e.target.value)}>
+        {states.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}
+      </NativeSelect>
+    </label>
+  );
+  return (
+    <section className="mx-auto mt-20 max-w-6xl px-4 sm:px-6" aria-labelledby="compare-heading">
+      <div className="rounded-xl border bg-card p-6 shadow-sm sm:p-8">
+        <h2 id="compare-heading" className="text-2xl font-semibold tracking-tight">Compare two states</h2>
+        <p className="mt-1 text-muted-foreground">
+          The average price hospitals in two states publish for the same procedure.
+        </p>
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_auto] lg:items-end">
+          <label className="sm:col-span-2 lg:col-span-1">
+            <span className="mb-1.5 block text-sm font-medium">Service</span>
+            <NativeSelect value={service} onChange={(e) => setService(e.target.value)}>
+              {categories.map((category) => (
+                <optgroup key={category} label={category}>
+                  {featuredServices.filter((s) => s.category === category).map((s) => (
+                    <option key={s.slug} value={s.slug}>{s.description}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </NativeSelect>
+          </label>
+          {statePicker("First state", a, setA)}
+          {statePicker("Second state", b, setB)}
+          <Link
+            to={to}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 sm:col-span-2 lg:col-span-1"
+          >
+            Compare <ArrowRight aria-hidden className="size-4" />
+          </Link>
+        </div>
+      </div>
+    </section>
   );
 }

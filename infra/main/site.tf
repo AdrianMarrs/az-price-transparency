@@ -88,15 +88,8 @@ resource "aws_cloudfront_response_headers_policy" "site" {
       override        = true
     }
     content_security_policy {
-      content_security_policy = join("; ", [
-        "default-src 'self'",
-        "connect-src 'self'", # the data files are same-origin (serving/export_static.py)
-        "img-src 'self' data:",
-        "style-src 'self'",
-        "script-src 'self'",
-        "frame-ancestors 'none'",
-      ])
-      override = true
+      content_security_policy = join("; ", var.adsense ? local.csp_adsense : local.csp)
+      override                = true
     }
   }
 }
@@ -182,4 +175,28 @@ output "site_url" {
 
 output "site_distribution_id" {
   value = aws_cloudfront_distribution.site.id
+}
+
+locals {
+  csp = [
+    "default-src 'self'",
+    "connect-src 'self'", # the data files are same-origin (serving/export_static.py)
+    "img-src 'self' data:",
+    "style-src 'self'",
+    "script-src 'self'",
+    "frame-ancestors 'none'",
+  ]
+  # The same, plus what Google AdSense loads: its script, the ads (in frames), their images,
+  # its consent message for visitors from Europe, and the inline styles it sets on ads.
+  # The site's own scripts stay 'self' only (no 'unsafe-inline' for scripts).
+  google_ads = "https://*.googlesyndication.com https://*.doubleclick.net https://*.google.com https://*.adtrafficquality.google https://*.googleadservices.com https://*.gstatic.com"
+  csp_adsense = [
+    "default-src 'self'",
+    "connect-src 'self' ${local.google_ads}",
+    "img-src 'self' data: https:",
+    "style-src 'self' 'unsafe-inline'",
+    "script-src 'self' ${local.google_ads}",
+    "frame-src ${local.google_ads}",
+    "frame-ancestors 'none'",
+  ]
 }

@@ -151,3 +151,31 @@ export function titleCase(text: string | undefined): string {
     .toLowerCase()
     .replace(/(^|[\s\-/(])(\w)/g, (_, pre: string, c: string) => pre + c.toUpperCase());
 }
+
+// One state's prices for a service, for comparing states: the average (and median) of its
+// hospitals' insurer medians, so a hospital with 200 plans counts once, like one with 2.
+// Not weighted by how often the service is done at each hospital: the files don't say.
+export type StateStats = {
+  hospitals: number; // hospitals with an insurer dollar price
+  average: number | null;
+  median: number | null;
+  range: Range;
+  cashHospitals: number;
+  cashAverage: number | null; // of each hospital's lowest cash price
+};
+
+const mean = (values: number[]) => (values.length ? values.reduce((a, b) => a + b, 0) / values.length : null);
+
+export function stateStats(rows: HospitalPrices[], f: Filters): StateStats {
+  const summaries = rows.map((r) => summarize(r, f));
+  const medians = summaries.map((s) => s.insurerMedian).filter((m): m is number => m != null);
+  const cash = summaries.map((s) => s.cash?.low).filter((c): c is number => c != null);
+  return {
+    hospitals: medians.length,
+    average: mean(medians),
+    median: median(medians),
+    range: range(medians),
+    cashHospitals: cash.length,
+    cashAverage: mean(cash),
+  };
+}

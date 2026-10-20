@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { HospitalPrices } from "./api";
-import { compareRows, median, moneyRange, sortRows, summarize, titleCase, type Filters } from "./summary";
+import { compareRows, median, moneyRange, sortRows, stateStats, summarize, titleCase, type Filters } from "./summary";
 
 const ALL: Filters = { county: "", setting: "any", market: "", payer: "" };
 
@@ -102,5 +102,34 @@ describe("sortRows", () => {
     expect(order("cash", "desc")).toEqual(["a", "c", "b"]);
     expect(order("median", "desc")).toEqual(["a", "c", "b"]);
     expect(order("score", "desc")).toEqual(["b", "a", "c"]);
+  });
+});
+
+describe("stateStats", () => {
+  const other: HospitalPrices = {
+    hospital: { ccn: "030002", name: "BANNER" },
+    plans: 1,
+    standard: [],
+    prices: [{ payer: "Aetna", market: "commercial", type: "negotiated_dollar", amount: 2000, n: 1 }],
+  };
+  const none: HospitalPrices = { hospital: { ccn: "030003" }, plans: 0, standard: [], prices: [] };
+
+  it("averages each hospital's median once, and skips hospitals with no dollar price", () => {
+    const s = stateStats([row, other, none], ALL);
+    const first = (1421.79 + 167) / 2;
+    expect(s.hospitals).toBe(2);
+    expect(s.average).toBeCloseTo((first + 2000) / 2);
+    expect(s.range).toEqual({ low: first, high: 2000 });
+    expect(s.cashHospitals).toBe(1);
+    expect(s.cashAverage).toBe(900);
+  });
+
+  it("applies the market filter", () => {
+    const s = stateStats([row, other], { ...ALL, market: "commercial" });
+    expect(s.average).toBeCloseTo((1421.79 + 2000) / 2);
+  });
+
+  it("has no numbers for a state with no prices", () => {
+    expect(stateStats([], ALL)).toEqual({ hospitals: 0, average: null, median: null, range: null, cashHospitals: 0, cashAverage: null });
   });
 });

@@ -2,6 +2,7 @@ import { ArrowRight, FileSearch, Scale, ShieldCheck } from "lucide-react";
 import { Link } from "react-router";
 
 import type { Route } from "./+types/state";
+import { AdSlot } from "~/components/ad-slot";
 import { ScoreBadge } from "~/components/score-badge";
 import { SearchBox } from "~/components/search-box";
 import { Card, CardContent } from "~/components/ui/card";
@@ -160,6 +161,8 @@ export default function StateHome({ loaderData: { state, catalog } }: Route.Comp
           </ul>
         </Card>
       </section>
+
+      <AdSlot className="mt-16" />
 
       <section className="mx-auto mt-20 max-w-6xl px-4 sm:px-6" aria-labelledby="how-heading">
         <h2 id="how-heading" className="text-2xl font-semibold tracking-tight">How it works</h2>

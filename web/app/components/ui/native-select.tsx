@@ -6,7 +6,11 @@ import * as React from "react";
 
 import { cn } from "~/lib/utils";
 
-export function NativeSelect({ className, children, ...props }: React.ComponentProps<"select">) {
+// className sizes and places the box (the select fills it); selectClassName styles the
+// select itself, e.g. a taller one.
+export function NativeSelect({ className, selectClassName, children, ...props }: React.ComponentProps<"select"> & {
+  selectClassName?: string;
+}) {
   return (
     <div className={cn("relative", className)}>
       <select
@@ -14,6 +18,7 @@ export function NativeSelect({ className, children, ...props }: React.ComponentP
         className={cn(
           "h-9 w-full appearance-none rounded-md border border-input bg-card pl-3 pr-9 text-sm shadow-xs outline-none transition",
           "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/30 disabled:opacity-50",
+          selectClassName,
         )}
         {...props}
       >
