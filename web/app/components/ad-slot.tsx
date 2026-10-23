@@ -9,7 +9,7 @@
 // state and procedure, which AdSense reads from the page itself), not the visitor.
 // See /privacy.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { useLocation } from "react-router";
 
 import { cn } from "~/lib/utils";
@@ -40,18 +40,61 @@ export function useAdSense() {
   }, []);
 }
 
-// One responsive display ad, remounted on each page change (the key), because AdSense
-// fills an <ins> once. Google's script loads after hydration, so it can't change the
+// A page's ads: a wide banner where the component is placed (below the page's content), and,
+// on screens wide enough to have room beside the content, a tall ad that stays in view in
+// the right margin. Each is remounted on each page change (the key), because AdSense fills
+// an <ins> once. Google's script loads after hydration, so it can't change the
 // pre-rendered markup before React has hydrated it.
 export function AdSlot({ className }: { className?: string }) {
   const { pathname } = useLocation();
-  return adsOn ? <Ad key={pathname} className={className} /> : null;
+  const rail = useMediaQuery(RAIL_FITS);
+  if (!adsOn) return null;
+  return (
+    <>
+      <aside aria-label="Advertisement" className={cn("mx-auto max-w-6xl px-4 sm:px-6", className)}>
+        <Label />
+        <Ad key={pathname} format="horizontal" className="block min-h-[90px] w-full" />
+      </aside>
+      {rail && (
+        // Centered in the right margin: (margin - 160px) / 2 from the edge, where the
+        // margin is (100vw - 72rem) / 2 (the content is max-w-6xl, 72rem).
+        <aside aria-label="Advertisement" className="fixed top-24 right-[calc((100vw-72rem-160px*2)/4)] z-30 w-[160px]">
+          <Label />
+          <Ad key={`rail${pathname}`} className="block h-[600px] w-[160px]" />
+        </aside>
+      )}
+    </>
+  );
 }
 
-function Ad({ className }: { className?: string }) {
+// The rail is 160px wide and 600px tall (a "wide skyscraper"). It's shown only when it fits
+// in the margin beside the 72rem (1152px) content with room to spare, and the window is tall
+// enough for it below the header; otherwise it's not rendered at all (AdSense can't fill a
+// hidden slot).
+const RAIL_FITS = "(min-width: 1536px) and (min-height: 760px)";
+
+function useMediaQuery(query: string): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      const list = window.matchMedia(query);
+      list.addEventListener("change", onChange);
+      return () => list.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia(query).matches,
+    () => false, // pre-rendered without it, so hydration matches
+  );
+}
+
+const Label = () => <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Advertisement</p>;
+
+// format "horizontal" asks for a wide ad that fits the slot's width; with no format, the
+// slot's own CSS size is the ad's size (AdSense's way to fix a responsive unit's size).
+function Ad({ format, className }: { format?: "horizontal"; className: string }) {
   const ref = useRef<HTMLModElement>(null);
+  const requested = useRef(false); // effects run twice in development (StrictMode)
   useEffect(() => {
-    if (!ref.current || ref.current.dataset.adsbygoogleStatus) return;
+    if (!ref.current || requested.current || ref.current.dataset.adsbygoogleStatus) return;
+    requested.current = true;
     try {
       (window.adsbygoogle ??= []).push({});
     } catch {
@@ -59,16 +102,13 @@ function Ad({ className }: { className?: string }) {
     }
   }, []);
   return (
-    <aside aria-label="Advertisement" className={cn("mx-auto max-w-6xl px-4 sm:px-6", className)}>
-      <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Advertisement</p>
-      <ins
-        ref={ref}
-        className="adsbygoogle block min-h-[100px]"
-        data-ad-client={ADSENSE_CLIENT}
-        data-ad-slot={SLOT}
-        data-ad-format="auto"
-        data-full-width-responsive="true"
-      />
-    </aside>
+    <ins
+      ref={ref}
+      className={cn("adsbygoogle", className)}
+      data-ad-client={ADSENSE_CLIENT}
+      data-ad-slot={SLOT}
+      data-ad-format={format}
+      data-full-width-responsive={format ? "true" : undefined}
+    />
   );
 }
