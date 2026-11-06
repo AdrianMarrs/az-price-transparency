@@ -138,5 +138,4 @@ By state ("with prices" counts hospitals with at least one usable price in the l
 
 - **Coverage:** 2,910 hospitals outside Arizona have no known website; finding more is the biggest lever. 214 more have a website whose file doesn't name them in a way the matching accepts.
 - **Still blocked:** 12 hospitals refuse even a browser on a home connection; someone would have to download their files by hand.
-- **The site:** the data files are written per state (`data/<state>/`); the pages still show Arizona only ([06](06-website.md#limits-and-open-questions)).
 - **Large files:** 45 deferred and 5 over the download limit, until there's a streaming parser.

@@ -177,6 +177,6 @@ Google AdSense, added October 2026 and off until the account exists (`components
 ## Limits and open questions
 
 - **Coverage varies by state.** A hospital without a price file we could read has a page with its score and no prices. In some states that's most of them ([05](05-national.md)).
-- **Each state stands alone.** A service is compared within one state. There's no cross-state comparison, and searching for a service needs a state.
+- **Each state stands alone.** A service's prices are listed within one state; Compare sets two states side by side for one featured service only, and searching for a service needs a state.
 - **Data is frozen.** The refresh schedules are created turned off, so the files stay as the initial pass left them ([05](05-national.md)).
 - **Search is all in the browser.** Each state's service list is fetched on its first search; one list for the whole country would be too large to download.
