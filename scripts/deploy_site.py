@@ -72,7 +72,10 @@ def main() -> None:
     files = [p for p in DIST.rglob("*") if p.is_file()]
     keys = []
     with ThreadPoolExecutor(UPLOADERS) as pool:
-        for batch in ([p for p in files if p.suffix != ".html"], [p for p in files if p.suffix == ".html"]):
+        for batch in (
+            [p for p in files if p.suffix != ".html"],
+            [p for p in files if p.suffix == ".html"],
+        ):
             keys += pool.map(upload, batch)
     existing = [o["Key"] for page in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket)
                 for o in page.get("Contents", [])]  # fmt: skip
